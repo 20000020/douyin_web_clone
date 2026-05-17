@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>短视频网页端（离线演示）</title>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <div id="stage" aria-label="移动端画板">
+      <div id="device" class="device" role="application" aria-label="短视频页面">
+        <!-- 根页面：首页（含顶部栏目 + 内容页） -->
+        <div class="root is-active" data-root="home">
+          <header class="topnav" aria-label="顶部导航">
+            <button class="icon-btn icon-btn-plain" type="button" aria-label="菜单" data-action="menu">
+              <img class="icon-img" src="./assets/dy_icons/menu-white.png" alt="" />
+            </button>
+
+            <nav class="top-tabs" aria-label="栏目">
+              <button class="tab" data-tab="live" type="button">直播</button>
+              <button class="tab" data-tab="shanghai" type="button">上海</button>
+              <button class="tab" data-tab="follow" type="button">
+                关注 <span class="tab-dot" aria-hidden="true"></span>
+              </button>
+              <button class="tab is-active" data-tab="recommend" type="button">推荐</button>
+            </nav>
+
+            <button class="icon-btn icon-btn-plain" type="button" aria-label="搜索" data-action="search">
+              <img class="icon-img" src="./assets/dy_icons/search-light.png" alt="" />
+            </button>
+          </header>
+
+          <main class="pages">
+
+          <!-- 其余页面：占位（样式更接近抖音视频页） -->
+          <section class="page page-stream" data-page="live" aria-label="直播页面">
+            <div class="placeholder">
+              <div class="placeholder-title">直播</div>
+              <div class="placeholder-desc">保持抖音视频页结构：后续可替换为直播列表/直播间。</div>
+            </div>
+          </section>
+          <section class="page page-stream" data-page="shanghai" aria-label="城市页面">
+            <div class="placeholder">
+              <div class="placeholder-title">上海</div>
+              <div class="placeholder-desc">占位：可做同城内容流。</div>
+            </div>
+          </section>
+          <section class="page page-stream" data-page="follow" aria-label="关注页面">
+            <div class="placeholder">
+              <div class="placeholder-title">关注</div>
+              <div class="placeholder-desc">占位：可做关注内容流/分组。</div>
+            </div>
+          </section>
+          <section class="page page-recommend" data-page="recommend" aria-label="推荐页面（竖向刷动）">
+            <div class="feed" id="feed" aria-label="竖向信息流">
+              <!-- 第 1 条：占位视频 -->
+              <article class="feed-item" data-kind="fake-video" aria-label="视频 1">
+                <div class="fake-video v1" aria-hidden="true"></div>
+                <div class="headline" aria-hidden="true">
+                  <div class="hl-big">#风景日记</div>
+                  <div class="hl-big">这个地方美得不真实！舍不得离开 😍🏖️</div>
+                </div>
+                <div class="video-ui">
+                  <div class="right-actions">
+                    <div class="ra-avatar" data-action="profile" role="button" aria-label="打开主页">
+                      <span class="ra-plus">+</span>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-like" data-action="like" role="button" aria-label="点赞">
+                        <img class="ra-img like-off" src="./assets/dy_icons/love.svg" alt="" />
+                        <img class="ra-img like-on" src="./assets/dy_icons/loved.svg" alt="" />
+                      </div>
+                      <div class="ra-count">11.2w</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-comment" data-action="comment" role="button" aria-label="评论">
+                        <img class="ra-img" src="./assets/dy_icons/message.svg" alt="" />
+                      </div>
+                      <div class="ra-count">3.4k</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-star" data-action="collect" role="button" aria-label="收藏">
+                        <img class="ra-img star-off" src="./assets/dy_icons/star-white.png" alt="" />
+                        <img class="ra-img star-on" src="./assets/dy_icons/star-yellow.png" alt="" />
+                      </div>
+                      <div class="ra-count">3k+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-share" data-action="share" role="button" aria-label="分享">
+                        <img class="ra-img" src="./assets/dy_icons/share-white-full.png" alt="" />
+                      </div>
+                      <div class="ra-count">1k+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-disc" data-action="collection" role="button" aria-label="合集">
+                        <img class="ra-img disc-img" src="./assets/dy_icons/music.svg" alt="" />
+                      </div>
+                      <div class="ra-count">合集</div>
+                    </div>
+                  </div>
+                  <div class="caption">
+                    <div class="cap-row">
+                      <div class="cap-avatar" aria-hidden="true"></div>
+                      <div class="cap-user">@demo_01</div>
+                    </div>
+                    <div class="cap-text">#周末去哪儿 #旅行 这个周末天气超好，在海边度过了难忘的一天。🌊🏝️</div>
+                  </div>
+                </div>
+              </article>
+
+              <!-- 第 2 条：bars.html（打卡地图 H5）作为推荐流一条卡片 -->
+              <article class="feed-item bars-item" data-kind="bars" aria-label="打卡地图（bars）">
+                <iframe
+                  class="bars-frame"
+                  src="./bars.html"
+                  title="打卡地图"
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                ></iframe>
+              </article>
+
+              <!-- 第 3 条：douyin/douyin.html 作为推荐流展示页（类似 bars.html 的承载方式） -->
+              <article class="feed-item douyin-item" data-kind="douyin-card" aria-label="摄影时刻（douyin）">
+                <!-- 手势层：解决 iframe 吞掉上下刷的问题（竖向交给外层 feed；横向由外层识别后通知 iframe 翻页） -->
+                <div class="douyin-gesture-layer" aria-hidden="true"></div>
+                <!-- 兜底：A/B 点按切换（当 iOS 横滑判定不稳定时依然可用） -->
+                <div class="douyin-ab" aria-label="A/B 切换">
+                  <button class="dab-btn is-active" type="button" data-action="douyin-page-a" aria-label="切到 A：城市风景">城市风景</button>
+                  <button class="dab-btn" type="button" data-action="douyin-page-b" aria-label="切到 B：调色成片">调色成片</button>
+                </div>
+                <iframe
+                  class="douyin-frame"
+                  src="./douyin/douyin.html"
+                  title="抖音卡片 · 摄影时刻"
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                ></iframe>
+              </article>
+
+              <!-- （已移除）“这鱼我的爆了”精选截图页 -->
+
+              <!-- 第 3-6 条：占位视频 -->
+              <article class="feed-item" data-kind="fake-video" aria-label="视频 2">
+                <div class="fake-video v2" aria-hidden="true"></div>
+                <div class="video-ui">
+                  <div class="right-actions">
+                    <div class="ra-avatar" data-action="profile" role="button" aria-label="打开主页">
+                      <span class="ra-plus">+</span>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-like" data-action="like" role="button" aria-label="点赞">
+                        <img class="ra-img like-off" src="./assets/dy_icons/love.svg" alt="" />
+                        <img class="ra-img like-on" src="./assets/dy_icons/loved.svg" alt="" />
+                      </div>
+                      <div class="ra-count">8.6w</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-comment" data-action="comment" role="button" aria-label="评论">
+                        <img class="ra-img" src="./assets/dy_icons/message.svg" alt="" />
+                      </div>
+                      <div class="ra-count">2.1k</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-star" data-action="collect" role="button" aria-label="收藏">
+                        <img class="ra-img star-off" src="./assets/dy_icons/star-white.png" alt="" />
+                        <img class="ra-img star-on" src="./assets/dy_icons/star-yellow.png" alt="" />
+                      </div>
+                      <div class="ra-count">2k+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-share" data-action="share" role="button" aria-label="分享">
+                        <img class="ra-img" src="./assets/dy_icons/share-white-full.png" alt="" />
+                      </div>
+                      <div class="ra-count">900+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-disc" data-action="collection" role="button" aria-label="合集">
+                        <img class="ra-img disc-img" src="./assets/dy_icons/music.svg" alt="" />
+                      </div>
+                      <div class="ra-count">合集</div>
+                    </div>
+                  </div>
+                  <div class="caption">
+                    <div class="cap-row">
+                      <div class="cap-avatar" aria-hidden="true"></div>
+                      <div class="cap-user">@demo_02</div>
+                    </div>
+                    <div class="cap-text">#海边 #日落 今天的晚霞真的太夸张了，拍了好久都不舍得走。</div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="feed-item" data-kind="fake-video" aria-label="视频 3">
+                <div class="fake-video v3" aria-hidden="true"></div>
+                <div class="video-ui">
+                  <div class="right-actions">
+                    <div class="ra-avatar" data-action="profile" role="button" aria-label="打开主页">
+                      <span class="ra-plus">+</span>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-like" data-action="like" role="button" aria-label="点赞">
+                        <img class="ra-img like-off" src="./assets/dy_icons/love.svg" alt="" />
+                        <img class="ra-img like-on" src="./assets/dy_icons/loved.svg" alt="" />
+                      </div>
+                      <div class="ra-count">5.3w</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-comment" data-action="comment" role="button" aria-label="评论">
+                        <img class="ra-img" src="./assets/dy_icons/message.svg" alt="" />
+                      </div>
+                      <div class="ra-count">1.4k</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-star" data-action="collect" role="button" aria-label="收藏">
+                        <img class="ra-img star-off" src="./assets/dy_icons/star-white.png" alt="" />
+                        <img class="ra-img star-on" src="./assets/dy_icons/star-yellow.png" alt="" />
+                      </div>
+                      <div class="ra-count">1k+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-share" data-action="share" role="button" aria-label="分享">
+                        <img class="ra-img" src="./assets/dy_icons/share-white-full.png" alt="" />
+                      </div>
+                      <div class="ra-count">600+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-disc" data-action="collection" role="button" aria-label="合集">
+                        <img class="ra-img disc-img" src="./assets/dy_icons/music.svg" alt="" />
+                      </div>
+                      <div class="ra-count">合集</div>
+                    </div>
+                  </div>
+                  <div class="caption">
+                    <div class="cap-row">
+                      <div class="cap-avatar" aria-hidden="true"></div>
+                      <div class="cap-user">@demo_03</div>
+                    </div>
+                    <div class="cap-text">#散步 #城市漫游 走到一个小巷子里，突然就被这束光治愈了。</div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="feed-item" data-kind="fake-video" aria-label="视频 4">
+                <div class="fake-video v4" aria-hidden="true"></div>
+                <div class="video-ui">
+                  <div class="right-actions">
+                    <div class="ra-avatar" data-action="profile" role="button" aria-label="打开主页">
+                      <span class="ra-plus">+</span>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-like" data-action="like" role="button" aria-label="点赞">
+                        <img class="ra-img like-off" src="./assets/dy_icons/love.svg" alt="" />
+                        <img class="ra-img like-on" src="./assets/dy_icons/loved.svg" alt="" />
+                      </div>
+                      <div class="ra-count">9.1w</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-comment" data-action="comment" role="button" aria-label="评论">
+                        <img class="ra-img" src="./assets/dy_icons/message.svg" alt="" />
+                      </div>
+                      <div class="ra-count">2.8k</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-star" data-action="collect" role="button" aria-label="收藏">
+                        <img class="ra-img star-off" src="./assets/dy_icons/star-white.png" alt="" />
+                        <img class="ra-img star-on" src="./assets/dy_icons/star-yellow.png" alt="" />
+                      </div>
+                      <div class="ra-count">2k+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-share" data-action="share" role="button" aria-label="分享">
+                        <img class="ra-img" src="./assets/dy_icons/share-white-full.png" alt="" />
+                      </div>
+                      <div class="ra-count">1k+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-disc" data-action="collection" role="button" aria-label="合集">
+                        <img class="ra-img disc-img" src="./assets/dy_icons/music.svg" alt="" />
+                      </div>
+                      <div class="ra-count">合集</div>
+                    </div>
+                  </div>
+                  <div class="caption">
+                    <div class="cap-row">
+                      <div class="cap-avatar" aria-hidden="true"></div>
+                      <div class="cap-user">@demo_04</div>
+                    </div>
+                    <div class="cap-text">#治愈系 #海风 一开口就是夏天的味道，真的想一直待在这里。</div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="feed-item" data-kind="fake-video" aria-label="视频 5">
+                <div class="fake-video v5" aria-hidden="true"></div>
+                <div class="video-ui">
+                  <div class="right-actions">
+                    <div class="ra-avatar" data-action="profile" role="button" aria-label="打开主页">
+                      <span class="ra-plus">+</span>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-like" data-action="like" role="button" aria-label="点赞">
+                        <img class="ra-img like-off" src="./assets/dy_icons/love.svg" alt="" />
+                        <img class="ra-img like-on" src="./assets/dy_icons/loved.svg" alt="" />
+                      </div>
+                      <div class="ra-count">7.8w</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-comment" data-action="comment" role="button" aria-label="评论">
+                        <img class="ra-img" src="./assets/dy_icons/message.svg" alt="" />
+                      </div>
+                      <div class="ra-count">1.9k</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-star" data-action="collect" role="button" aria-label="收藏">
+                        <img class="ra-img star-off" src="./assets/dy_icons/star-white.png" alt="" />
+                        <img class="ra-img star-on" src="./assets/dy_icons/star-yellow.png" alt="" />
+                      </div>
+                      <div class="ra-count">1k+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-share" data-action="share" role="button" aria-label="分享">
+                        <img class="ra-img" src="./assets/dy_icons/share-white-full.png" alt="" />
+                      </div>
+                      <div class="ra-count">700+</div>
+                    </div>
+                    <div class="ra-block">
+                      <div class="ra-ico ra-disc" data-action="collection" role="button" aria-label="合集">
+                        <img class="ra-img disc-img" src="./assets/dy_icons/music.svg" alt="" />
+                      </div>
+                      <div class="ra-count">合集</div>
+                    </div>
+                  </div>
+                  <div class="caption">
+                    <div class="cap-row">
+                      <div class="cap-avatar" aria-hidden="true"></div>
+                      <div class="cap-user">@demo_05</div>
+                    </div>
+                    <div class="cap-text">#旅行碎片 #松弛感 不赶路、不打卡，就这样慢慢走，太舒服了。</div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+        </main>
+        </div>
+
+        <!-- 根页面：底部栏其它入口（先占位，但结构与抖音一致） -->
+        <div class="root" data-root="friends" aria-label="朋友">
+          <div class="root-title">朋友</div>
+          <div class="root-desc">占位：后续可做“朋友”内容流。</div>
+        </div>
+        <div class="root" data-root="messages" aria-label="消息">
+          <div class="root-title">消息</div>
+          <div class="root-desc">占位：后续可做消息列表/私信。</div>
+        </div>
+        <div class="root" data-root="me" aria-label="我">
+          <div class="root-title">我</div>
+          <div class="root-desc">占位：后续可做个人主页。</div>
+        </div>
+
+        <!-- 底部导航（仿抖音） -->
+        <nav class="bottom-nav" aria-label="底部导航">
+          <button class="bn is-active" data-root="home" type="button">首页</button>
+          <button class="bn" data-root="friends" type="button">朋友</button>
+          <button class="bn-plus" type="button" aria-label="发布">
+            <img class="bn-plus-img" src="./assets/dy_icons/add-light.png" alt="" />
+          </button>
+          <button class="bn" data-root="messages" type="button">消息</button>
+          <button class="bn" data-root="me" type="button">我</button>
+        </nav>
+
+        <!-- 评论抽屉（仿抖音：遮罩 + 底部弹出） -->
+        <div id="sheet-mask" class="sheet-mask" aria-hidden="true"></div>
+        <section id="sheet-comments" class="sheet sheet-comments" aria-label="评论抽屉" aria-hidden="true">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <header class="sheet-header">
+            <div class="sheet-title">评论 <span class="sheet-sub">(345)</span></div>
+            <button class="sheet-close" type="button" aria-label="关闭评论" data-action="close-sheet">×</button>
+          </header>
+          <div class="sheet-body">
+            <ul class="c-list" aria-label="评论列表">
+              <li class="c-item">
+                <div class="c-avatar" aria-hidden="true"></div>
+                <div class="c-content">
+                  <div class="c-name">小鹿同学</div>
+                  <div class="c-text">太美了！这光线绝了，已经存下来准备周末去。</div>
+                  <div class="c-meta">2小时前 · 赞 1.2k</div>
+                </div>
+              </li>
+              <li class="c-item">
+                <div class="c-avatar" aria-hidden="true"></div>
+                <div class="c-content">
+                  <div class="c-name">海边散步</div>
+                  <div class="c-text">求地点！想看日落，感觉比滤镜还梦幻。</div>
+                  <div class="c-meta">3小时前 · 赞 860</div>
+                </div>
+              </li>
+              <li class="c-item">
+                <div class="c-avatar" aria-hidden="true"></div>
+                <div class="c-content">
+                  <div class="c-name">周末去哪儿</div>
+                  <div class="c-text">建议傍晚去，风不大，人也少，拍照太出片。</div>
+                  <div class="c-meta">5小时前 · 赞 402</div>
+                </div>
+              </li>
+              <li class="c-item">
+                <div class="c-avatar" aria-hidden="true"></div>
+                <div class="c-content">
+                  <div class="c-name">旅行日记</div>
+                  <div class="c-text">听说这里下雨天也很漂亮，有去过的吗？</div>
+                  <div class="c-meta">昨天 · 赞 126</div>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <footer class="sheet-input">
+            <div class="input-pill">
+              <span class="input-placeholder">说点什么…</span>
+            </div>
+          </footer>
+        </section>
+      </div>
+    </div>
+
+    <script src="./js/app.js"></script>
+  </body>
+</html>
