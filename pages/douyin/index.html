@@ -1,0 +1,1792 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <title>抖音卡片 · 摄影时刻</title>
+    <style>
+      :root {
+        /* 参考图风格：奶油玻璃 + 纸张质感 */
+        --paper0: #f6f0e6;
+        --paper1: #efe7d8;
+        --ink: rgba(23, 19, 16, 0.92);
+        --muted: rgba(23, 19, 16, 0.62);
+        --line: rgba(23, 19, 16, 0.14);
+        --glass: rgba(255, 255, 255, 0.55);
+        --glass2: rgba(255, 255, 255, 0.42);
+        --radius: 22px;
+        --radiusSm: 16px;
+        --shadow: 0 26px 70px rgba(35, 28, 20, 0.22);
+        --shadow2: 0 14px 38px rgba(35, 28, 20, 0.16);
+
+        /* 照片调色变量（JS 会更新） */
+        --f-bright: 1;
+        --f-contrast: 1;
+        --f-sat: 1;
+        --f-hue: 0deg;
+        --f-sep: 0;
+        --hl: 0.08; /* 高光叠加（screen） */
+        --sh: 0.14; /* 阴影叠加（multiply） */
+        --tempWarm: 0.08;
+        --tempCool: 0;
+        /* iOS/iframe 下 100vh 可能不准：用 JS 写入真实视口高度（单位=1vh） */
+        --vh: 1vh;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+        color: var(--ink);
+        overflow: hidden;
+        background: linear-gradient(180deg, var(--paper0), var(--paper1));
+      }
+
+      /* 背景：水彩般的色块 + 轻噪点（纯 CSS / SVG dataURL，无外链） */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: -40px;
+        background:
+          radial-gradient(900px 600px at 30% 20%, rgba(97, 217, 224, 0.35), transparent 60%),
+          radial-gradient(980px 640px at 78% 18%, rgba(255, 165, 140, 0.38), transparent 62%),
+          radial-gradient(1100px 820px at 70% 88%, rgba(125, 185, 120, 0.28), transparent 60%),
+          radial-gradient(760px 560px at 15% 88%, rgba(105, 160, 255, 0.18), transparent 58%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.18));
+        filter: blur(6px);
+        opacity: 0.92;
+        pointer-events: none;
+      }
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)' opacity='.11'/%3E%3C/svg%3E");
+        mix-blend-mode: multiply;
+        opacity: 0.35;
+        pointer-events: none;
+      }
+
+      /* =========================
+         两段式：横向滑动分页
+         ========================= */
+      .pager {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        /* 注意：这里不强行锁定 pan-x，避免 iOS 影响子滚动 */
+        touch-action: auto;
+        scrollbar-width: none;
+      }
+      .pager::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      .wrap {
+        position: relative;
+        flex: 0 0 100%;
+        height: calc(var(--vh) * 100);
+        scroll-snap-align: start;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px 14px;
+      }
+
+      .pager-dots {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 50;
+      }
+      .dots-inner {
+        pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.55);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 16px 36px rgba(35, 28, 20, 0.14);
+      }
+      .dotbtn {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 999px;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(23, 19, 16, 0.18);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+      }
+      .dotbtn.is-active .dot {
+        background: rgba(23, 19, 16, 0.62);
+      }
+      .dotlabel {
+        font-size: 12px;
+        font-weight: 1000;
+        letter-spacing: 2px;
+        color: rgba(23, 19, 16, 0.72);
+      }
+
+      .card {
+        width: min(440px, 100%);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.46);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        backdrop-filter: blur(14px);
+        /* 关键：给出确定高度，确保内部滚动容器一定能滚动 */
+        height: calc((var(--vh) * 100) - 36px);
+      }
+
+      .card-inner {
+        padding: 18px 18px 16px 18px;
+      }
+
+      /* 小屏时允许卡片内部滚动 */
+      .card-scroll {
+        height: calc((var(--vh) * 100) - 36px);
+        /* 支持上下互动：卡片内容可竖向滚动（同时不影响横向翻页） */
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        /* 允许竖向滚动 + 横向翻页；避免 pan-y 导致横向手势在 iOS 上被禁止 */
+        touch-action: manipulation;
+        overscroll-behavior: contain;
+        scrollbar-width: none;
+      }
+      .card-scroll::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      .topline {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        justify-content: center;
+        padding: 12px 10px 10px 10px;
+      }
+      .orb {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 52%),
+          conic-gradient(from 210deg, #49d2ff, #ff76c8, #ffd079, #49d2ff);
+        box-shadow: 0 10px 28px rgba(35, 28, 20, 0.12);
+      }
+      .topline .title {
+        font-weight: 900;
+        letter-spacing: 6px;
+        font-size: 18px;
+      }
+      .topline .sep {
+        width: 1px;
+        height: 18px;
+        background: rgba(23, 19, 16, 0.16);
+        transform: translateY(1px);
+      }
+      .topline .sub {
+        font-weight: 800;
+        letter-spacing: 4px;
+        color: rgba(23, 19, 16, 0.72);
+      }
+
+      .line {
+        height: 1px;
+        background: linear-gradient(90deg, rgba(23, 19, 16, 0), rgba(23, 19, 16, 0.18), rgba(23, 19, 16, 0));
+        margin: 6px 0 14px 0;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: rgba(23, 19, 16, 0.72);
+        font-weight: 900;
+        letter-spacing: 4px;
+        font-size: 13px;
+      }
+      .section-head::before,
+      .section-head::after {
+        content: "";
+        height: 1px;
+        flex: 1;
+        background: rgba(23, 19, 16, 0.14);
+        opacity: 0.7;
+      }
+      .section-head span {
+        transform: translateY(-1px);
+      }
+
+      /* A: 输入城市 */
+      .city-row {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.62);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        border-radius: 18px;
+        padding: 12px 12px;
+        box-shadow: var(--shadow2);
+      }
+      .city-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 60%), #e96b58;
+        box-shadow: 0 0 0 4px rgba(233, 107, 88, 0.18);
+        flex: 0 0 auto;
+      }
+      .city-input {
+        border: 0;
+        outline: none;
+        background: transparent;
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: 2px;
+        width: 100%;
+        min-width: 0;
+        color: rgba(23, 19, 16, 0.95);
+      }
+      .city-input::placeholder {
+        color: rgba(23, 19, 16, 0.34);
+        font-weight: 800;
+      }
+      .go-btn {
+        flex: 0 0 auto;
+        height: 40px;
+        padding: 0 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        background: rgba(255, 255, 255, 0.65);
+        color: rgba(23, 19, 16, 0.88);
+        font-weight: 1000;
+        letter-spacing: 2px;
+        cursor: pointer;
+      }
+      .go-btn:active {
+        transform: translateY(1px);
+      }
+
+      /* 参数卡片 */
+      .params {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+      }
+      .pbox {
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.46);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        padding: 10px 10px 9px 10px;
+        text-align: center;
+        box-shadow: 0 10px 22px rgba(35, 28, 20, 0.12);
+      }
+      .pbox .k {
+        font-weight: 900;
+        letter-spacing: 2px;
+        color: rgba(23, 19, 16, 0.56);
+        font-size: 12px;
+      }
+      .pbox .v {
+        margin-top: 4px;
+        font-weight: 1000;
+        font-size: 28px;
+        letter-spacing: 1px;
+        color: rgba(23, 19, 16, 0.92);
+      }
+
+      .mid-hint {
+        margin: 14px 0 10px 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: rgba(23, 19, 16, 0.68);
+        font-weight: 900;
+        letter-spacing: 6px;
+      }
+      .mid-hint::before,
+      .mid-hint::after {
+        content: "";
+        height: 1px;
+        flex: 1;
+        background: rgba(23, 19, 16, 0.14);
+        opacity: 0.7;
+      }
+
+      /* B: 机位推荐 */
+      .photo-card {
+        margin-top: 12px;
+        border-radius: 18px;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.12);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        box-shadow: 0 18px 44px rgba(35, 28, 20, 0.16);
+        position: relative;
+      }
+      .photo-wrap {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        background: #d9d9d9;
+      }
+      .photo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: brightness(var(--f-bright)) contrast(var(--f-contrast)) saturate(var(--f-sat)) hue-rotate(var(--f-hue))
+          sepia(var(--f-sep));
+        transform: scale(1.02);
+      }
+
+      /* 高光/阴影/色温叠加：用伪元素模拟更“摄影”的调色手感 */
+      .photo-wrap::before,
+      .photo-wrap::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      /* 色温（暖） */
+      .photo-wrap::before {
+        background: radial-gradient(1200px 540px at 55% 35%, rgba(255, 170, 90, 0.45), rgba(255, 170, 90, 0) 60%),
+          radial-gradient(900px 520px at 25% 60%, rgba(120, 235, 255, 0.38), rgba(120, 235, 255, 0) 58%);
+        mix-blend-mode: color;
+        opacity: calc(var(--tempWarm) + var(--tempCool));
+      }
+      /* 高光/阴影 */
+      .photo-wrap::after {
+        background: radial-gradient(1200px 520px at 50% 20%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 55%),
+          linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.18));
+        mix-blend-mode: screen;
+        opacity: var(--hl);
+      }
+      .shade {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(900px 520px at 50% 90%, rgba(0, 0, 0, 0.52), rgba(0, 0, 0, 0) 58%);
+        mix-blend-mode: multiply;
+        opacity: var(--sh);
+      }
+
+      .photo-meta {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        top: 12px;
+        display: flex;
+        justify-content: flex-start;
+        z-index: 3;
+        pointer-events: none;
+      }
+      .meta-pill {
+        pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.32);
+        color: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(14px);
+        font-weight: 900;
+        letter-spacing: 3px;
+        font-size: 12px;
+      }
+      .meta-pill .sp {
+        width: 1px;
+        height: 12px;
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      .caption {
+        padding: 14px 2px 4px 2px;
+      }
+      .caption .big {
+        font-size: 40px;
+        font-weight: 1000;
+        letter-spacing: 2px;
+        color: rgba(23, 19, 16, 0.92);
+      }
+      .caption .small {
+        margin-top: 6px;
+        color: rgba(23, 19, 16, 0.62);
+        font-weight: 900;
+        letter-spacing: 3px;
+        font-size: 12px;
+      }
+      .credit {
+        margin-top: 8px;
+        font-size: 12px;
+        color: rgba(23, 19, 16, 0.58);
+        letter-spacing: 0.6px;
+        line-height: 1.35;
+      }
+
+      /* 调色模块 */
+      .tone {
+        margin-top: 10px;
+        padding: 12px 12px 12px 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.5);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        box-shadow: 0 14px 34px rgba(35, 28, 20, 0.14);
+      }
+      .tone-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .tone-title {
+        font-weight: 1000;
+        letter-spacing: 3px;
+        color: rgba(23, 19, 16, 0.82);
+      }
+      .tone-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .mini {
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        background: rgba(255, 255, 255, 0.65);
+        color: rgba(23, 19, 16, 0.86);
+        font-weight: 1000;
+        letter-spacing: 1px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .mini:active {
+        transform: translateY(1px);
+      }
+
+      .sliders {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .srow {
+        display: grid;
+        grid-template-columns: 56px 1fr 50px;
+        align-items: center;
+        gap: 10px;
+      }
+      .slabel {
+        font-weight: 900;
+        color: rgba(23, 19, 16, 0.62);
+        letter-spacing: 2px;
+        font-size: 12px;
+      }
+      .svalue {
+        font-weight: 1000;
+        color: rgba(23, 19, 16, 0.72);
+        text-align: right;
+        font-size: 12px;
+        letter-spacing: 1px;
+      }
+      .track {
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(23, 19, 16, 0.08);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+        touch-action: none; /* 防止调色滑杆时触发翻页 */
+      }
+      .track::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(120, 235, 255, 0.55), rgba(255, 120, 200, 0.45), rgba(255, 210, 120, 0.45));
+        opacity: 0.75;
+      }
+      .knob {
+        position: absolute;
+        top: 50%;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(23, 19, 16, 0.14);
+        box-shadow: 0 10px 22px rgba(35, 28, 20, 0.16);
+      }
+
+      .footnote {
+        margin-top: 10px;
+        font-size: 12px;
+        color: rgba(23, 19, 16, 0.52);
+        letter-spacing: 0.5px;
+        line-height: 1.4;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          scroll-behavior: auto !important;
+          transition: none !important;
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="pager" class="pager" aria-label="从右向左滑动切换两部分">
+      <!-- Part A：城市 → 风景照 -->
+      <section class="wrap" data-page="a" aria-label="A 部分：城市与风景照">
+        <main class="card" role="main" aria-label="抖音卡片：摄影时刻（A）">
+          <div class="card-scroll">
+            <div class="topline" aria-hidden="true">
+              <span class="orb"></span>
+              <span class="title">抖音卡片</span>
+              <span class="sep"></span>
+              <span class="sub">摄影时刻 A → B</span>
+            </div>
+            <div class="line" aria-hidden="true"></div>
+
+            <div class="card-inner">
+              <div class="section-head"><span>A · 城市 → 风景</span></div>
+
+              <div class="city-row" aria-label="输入城市">
+                <span class="city-dot" aria-hidden="true"></span>
+                <input
+                  id="cityInput"
+                  class="city-input"
+                  type="text"
+                  inputmode="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="输入城市（例如：福州 / 上海 / 北京）"
+                />
+                <button id="btnGo" class="go-btn" type="button" aria-label="生成">GO →</button>
+              </div>
+
+              <div class="params" aria-label="推荐拍摄参数">
+                <div class="pbox"><div class="k">ISO</div><div id="pIso" class="v">—</div></div>
+                <div class="pbox"><div class="k">F</div><div id="pF" class="v">—</div></div>
+                <div class="pbox"><div class="k">SS</div><div id="pSs" class="v">—</div></div>
+                <div class="pbox"><div class="k">WB</div><div id="pWb" class="v">—</div></div>
+              </div>
+
+              <div class="mid-hint">就在附近</div>
+              <div class="section-head"><span>B · 机位推荐</span></div>
+
+              <section class="photo-card" aria-label="城市风景照（可在下一页调色）">
+                <div class="photo-wrap">
+                  <img id="photoA" class="photo" alt="城市风景照（真实照片优先）" />
+                  <div class="shade" aria-hidden="true"></div>
+                  <div class="photo-meta">
+                    <div class="meta-pill" aria-label="机位信息">
+                      <span id="metaDistA">—</span><span class="sp" aria-hidden="true"></span><span id="metaTimeA">—</span>
+                      <span class="sp" aria-hidden="true"></span><span id="metaMoodA">—</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="caption">
+                <div id="spotTitleA" class="big">请输入城市</div>
+                <div id="spotSubA" class="small">—</div>
+                <div id="photoCreditA" class="credit">来源：—</div>
+              </div>
+
+              <div class="footnote" style="text-align:center;">
+                提示：从<strong>右向左</strong>滑动进入下一部分，在那里可用色调模块调节这张照片。
+              </div>
+            </div>
+          </div>
+        </main>
+      </section>
+
+      <!-- Part B：调色 → 成片 -->
+      <section class="wrap" data-page="b" aria-label="B 部分：调色模块">
+        <main class="card" role="main" aria-label="抖音卡片：摄影时刻（B）">
+          <div class="card-scroll">
+            <div class="topline" aria-hidden="true">
+              <span class="orb"></span>
+              <span class="title">抖音卡片</span>
+              <span class="sep"></span>
+              <span class="sub">调色成片 B</span>
+            </div>
+            <div class="line" aria-hidden="true"></div>
+
+            <div class="card-inner">
+              <div class="section-head"><span>B · 调色 → 成片</span></div>
+
+              <section class="photo-card" aria-label="上一部分的城市风景照（可调色）">
+                <div class="photo-wrap">
+                  <img id="photoB" class="photo" alt="城市风景照（真实照片优先，可调色）" />
+                  <div class="shade" aria-hidden="true"></div>
+                  <div class="photo-meta">
+                    <div class="meta-pill" aria-label="机位信息">
+                      <span id="metaDistB">—</span><span class="sp" aria-hidden="true"></span><span id="metaTimeB">—</span>
+                      <span class="sp" aria-hidden="true"></span><span id="metaMoodB">—</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="caption">
+                <div id="spotTitleB" class="big" style="font-size:34px;">—</div>
+                <div id="spotSubB" class="small">—</div>
+                <div id="photoCreditB" class="credit">来源：—</div>
+              </div>
+
+              <section class="tone" aria-label="色调模块（可调节）">
+                <div class="tone-head">
+                  <div class="tone-title">色调模块（可调）</div>
+                  <div class="tone-actions">
+                    <button id="btnReset" class="mini" type="button">重置推荐</button>
+                    <button id="btnRandom" class="mini" type="button">换一种推荐</button>
+                  </div>
+                </div>
+
+                <div class="sliders" id="sliders">
+                  <div class="srow" data-key="temp">
+                    <div class="slabel">色温</div>
+                    <div class="track" role="slider" aria-label="色温" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="contrast">
+                    <div class="slabel">对比</div>
+                    <div class="track" role="slider" aria-label="对比度" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="sat">
+                    <div class="slabel">饱和</div>
+                    <div class="track" role="slider" aria-label="饱和度" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="expo">
+                    <div class="slabel">曝光</div>
+                    <div class="track" role="slider" aria-label="曝光" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="hi">
+                    <div class="slabel">高光</div>
+                    <div class="track" role="slider" aria-label="高光" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="sh">
+                    <div class="slabel">阴影</div>
+                    <div class="track" role="slider" aria-label="阴影" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="hue">
+                    <div class="slabel">色调</div>
+                    <div class="track" role="slider" aria-label="色调" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                </div>
+
+                <div class="footnote">
+                  说明：景点照片来自你上传并保存到项目 assets 的本地素材库；“推荐滤镜”会尝试联网获取<strong>实时天气</strong>以更智能地推荐（若获取失败则仅按时间推荐）。<br />
+                  提示：从<strong>左向右</strong>滑动可返回上一部分。
+                </div>
+              </section>
+            </div>
+          </div>
+        </main>
+      </section>
+    </div>
+
+    <nav class="pager-dots" aria-label="分页指示器">
+      <div class="dots-inner">
+        <button class="dotbtn is-active" type="button" data-dot="0" aria-label="第 1 部分：城市">
+          <span class="dot" aria-hidden="true"></span><span class="dotlabel">A</span>
+        </button>
+        <button class="dotbtn" type="button" data-dot="1" aria-label="第 2 部分：调色">
+          <span class="dot" aria-hidden="true"></span><span class="dotlabel">B</span>
+        </button>
+      </div>
+    </nav>
+
+    <script>
+      (function () {
+        "use strict";
+
+        const $ = (sel) => document.querySelector(sel);
+        const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+        // iOS/iframe 下 100vh 会偏大：用真实 innerHeight 写入 CSS 变量 --vh（单位=1vh）
+        function setVhVar() {
+          try {
+            const vh = (window.innerHeight || document.documentElement.clientHeight || 0) * 0.01;
+            document.documentElement.style.setProperty("--vh", `${vh}px`);
+          } catch (_) {}
+        }
+        setVhVar();
+        window.addEventListener("resize", setVhVar, { passive: true });
+
+        const pager = $("#pager");
+        const dotBtns = $$("[data-dot]");
+
+        const cityInput = $("#cityInput");
+        const btnGo = $("#btnGo");
+        const btnReset = $("#btnReset");
+        const btnRandom = $("#btnRandom");
+
+        const photoA = $("#photoA");
+        const photoB = $("#photoB");
+
+        const pIso = $("#pIso");
+        const pF = $("#pF");
+        const pSs = $("#pSs");
+        const pWb = $("#pWb");
+        const metaDistA = $("#metaDistA");
+        const metaTimeA = $("#metaTimeA");
+        const metaMoodA = $("#metaMoodA");
+        const spotTitleA = $("#spotTitleA");
+        const spotSubA = $("#spotSubA");
+
+        const metaDistB = $("#metaDistB");
+        const metaTimeB = $("#metaTimeB");
+        const metaMoodB = $("#metaMoodB");
+        const spotTitleB = $("#spotTitleB");
+        const spotSubB = $("#spotSubB");
+        const photoCreditA = $("#photoCreditA");
+        const photoCreditB = $("#photoCreditB");
+
+        const sliders = $("#sliders");
+
+        // ----------------------------
+        // 纯前端：确定性随机（同城市 → 同风格；“换一种推荐” → 换 seed）
+        // ----------------------------
+        function hash32(str) {
+          let h = 2166136261 >>> 0;
+          for (let i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+          }
+          return h >>> 0;
+        }
+        function mulberry32(seed) {
+          return function () {
+            seed |= 0;
+            seed = (seed + 0x6d2b79f5) | 0;
+            let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+            t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+        function clamp(n, a, b) {
+          return Math.max(a, Math.min(b, n));
+        }
+        function pick(rand, arr) {
+          return arr[Math.floor(rand() * arr.length)];
+        }
+
+        function fmtShutter(rand) {
+          const pool = ["1/80", "1/125", "1/200", "1/320", "1/500", "1/640", "1/1000"];
+          return pool[Math.floor(rand() * pool.length)];
+        }
+        function fmtF(rand) {
+          const pool = ["1.8", "2.0", "2.8", "3.2", "4.0"];
+          return pool[Math.floor(rand() * pool.length)];
+        }
+        function fmtIso(rand) {
+          const pool = ["100", "160", "200", "320", "400", "640"];
+          return pool[Math.floor(rand() * pool.length)];
+        }
+        function fmtWb(rand) {
+          // 偏暖/偏冷两端更“摄影”
+          const base = 4200 + Math.round(rand() * 2400);
+          return String(base);
+        }
+
+        // ----------------------------
+        // 城市 → 风景与文案
+        // ----------------------------
+        const MOODS = ["晨雾", "微风", "薄暮", "晴空", "夜色", "阴天", "晚霞", "雨后"];
+
+        function cityToSubtitle(city, spot) {
+          const c = city || "未知城市";
+          return `${c} · ${spot}`;
+        }
+
+        function moodFromHour(hh) {
+          if (hh >= 5 && hh < 10) return "晨雾";
+          if (hh >= 10 && hh < 16) return "晴空";
+          if (hh >= 16 && hh < 20) return "晚霞";
+          return "夜色";
+        }
+
+        function nowHHMM() {
+          const d = new Date();
+          const hh = String(d.getHours()).padStart(2, "0");
+          const mm = String(d.getMinutes()).padStart(2, "0");
+          return { hh: Number(hh), time: `${hh}:${mm}` };
+        }
+
+        function makeMeta() {
+          const dist = (0.6 + Math.random() * 3.2).toFixed(1);
+          const { hh, time } = nowHHMM();
+          const mood = moodFromHour(hh) || pick(mulberry32(Date.now() >>> 0), MOODS);
+          return { dist: `${dist}KM`, time, mood };
+        }
+
+        // ----------------------------
+        // 天气（联网，免 Key）：Open-Meteo
+        // - 仅用于“推荐滤镜”更智能；景点照片仍使用离线素材库
+        // - 获取失败：自动回退为仅按时间推荐
+        // ----------------------------
+        function fetchWithTimeout(url, ms) {
+          const controller = new AbortController();
+          const t = window.setTimeout(() => controller.abort(), Math.max(200, ms || 5200));
+          return fetch(url, { method: "GET", signal: controller.signal }).finally(() => window.clearTimeout(t));
+        }
+
+        function weatherKindFromCode(code) {
+          const c = Number(code);
+          if (c === 0) return { kind: "sunny", label: "晴" };
+          if (c >= 1 && c <= 3) return { kind: "cloudy", label: "多云" };
+          if (c === 45 || c === 48) return { kind: "fog", label: "雾" };
+          if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return { kind: "rain", label: "雨" };
+          if (c >= 71 && c <= 77) return { kind: "snow", label: "雪" };
+          if (c >= 95) return { kind: "thunder", label: "雷雨" };
+          return { kind: "overcast", label: "阴" };
+        }
+
+        async function fetchWeatherForPlace(placeName) {
+          const name = String(placeName || "").trim();
+          if (!name) throw new Error("empty_place");
+
+          // 1) 地理编码
+          const geoUrl =
+            "https://geocoding-api.open-meteo.com/v1/search" +
+            `?name=${encodeURIComponent(name)}` +
+            `&count=1&language=zh&format=json`;
+          const geoRes = await fetchWithTimeout(geoUrl, 5200);
+          if (!geoRes.ok) throw new Error("geo_failed");
+          const geo = await geoRes.json();
+          const hit = geo?.results?.[0];
+          const lat = hit?.latitude;
+          const lon = hit?.longitude;
+          if (lat == null || lon == null) throw new Error("geo_empty");
+
+          // 2) 实况天气
+          const wxUrl =
+            "https://api.open-meteo.com/v1/forecast" +
+            `?latitude=${encodeURIComponent(String(lat))}` +
+            `&longitude=${encodeURIComponent(String(lon))}` +
+            `&current=temperature_2m,weather_code,is_day` +
+            `&timezone=auto`;
+          const wxRes = await fetchWithTimeout(wxUrl, 5200);
+          if (!wxRes.ok) throw new Error("wx_failed");
+          const wx = await wxRes.json();
+          const tempC = wx?.current?.temperature_2m;
+          const code = wx?.current?.weather_code;
+          const isDay = wx?.current?.is_day;
+          if (code == null) throw new Error("wx_empty");
+          const w = weatherKindFromCode(code);
+          return {
+            name: hit?.name || name,
+            tempC: typeof tempC === "number" ? tempC : null,
+            code: Number(code),
+            isDay: isDay == null ? null : Number(isDay) === 1,
+            kind: w.kind,
+            label: w.label,
+            fetchedAt: Date.now(),
+          };
+        }
+
+        function renderMoodText() {
+          const base = state.baseMood || "—";
+          const w = state.weather?.label;
+          const mood = w ? `${base}·${w}` : base;
+          if (metaMoodA) metaMoodA.textContent = mood;
+          if (metaMoodB) metaMoodB.textContent = mood;
+        }
+
+        // ----------------------------
+        // 生成“独特风景照”：SVG 画面（带颗粒、雾气、远景层次）
+        // ----------------------------
+        function svgScenery(city, seedSalt) {
+          const seed = hash32(`${city}__${seedSalt}`);
+          const rand = mulberry32(seed);
+
+          // 调色板
+          const palettes = [
+            { sky0: "#b7d7ff", sky1: "#ffe4c6", hill0: "#2b3e4e", hill1: "#3b5a4a", water0: "#2d5a70", water1: "#1e2f3c" },
+            { sky0: "#c9f3ff", sky1: "#ffd7e9", hill0: "#26314b", hill1: "#2c5a5a", water0: "#2a6d78", water1: "#173041" },
+            { sky0: "#ffe7b8", sky1: "#c8eaff", hill0: "#3f2f2b", hill1: "#2e4a3b", water0: "#3b6e8a", water1: "#1a2a38" },
+          ];
+          const p = pick(rand, palettes);
+          const fog = 0.2 + rand() * 0.35;
+          const sunX = 20 + rand() * 60;
+          const sunY = 10 + rand() * 22;
+
+          // 城市剪影（可有可无）
+          const showCity = rand() > 0.42;
+          const skyline = [];
+          if (showCity) {
+            const n = 10 + Math.floor(rand() * 10);
+            let x = 0;
+            for (let i = 0; i < n; i++) {
+              const w = 18 + rand() * 30;
+              const h = 22 + rand() * 52;
+              skyline.push({ x, w, h });
+              x += w * (0.75 + rand() * 0.25);
+            }
+          }
+
+          const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${p.sky0}"/>
+      <stop offset="1" stop-color="${p.sky1}"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${p.water0}"/>
+      <stop offset="1" stop-color="${p.water1}"/>
+    </linearGradient>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch" />
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 .14 0"/>
+    </filter>
+    <filter id="soft">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <radialGradient id="sun" cx="${sunX}%" cy="${sunY}%" r="55%">
+      <stop offset="0" stop-color="rgba(255,255,255,.95)"/>
+      <stop offset=".28" stop-color="rgba(255,255,255,.55)"/>
+      <stop offset="1" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#sun)" opacity=".65"/>
+
+  <!-- 远山 -->
+  <path d="M0,560 C240,470 420,520 620,460 C860,390 980,470 1200,440 C1380,420 1480,460 1600,430 L1600,900 L0,900 Z"
+        fill="${p.hill0}" opacity=".72"/>
+  <path d="M0,610 C260,520 480,590 700,530 C960,460 1060,540 1280,520 C1450,510 1520,540 1600,520 L1600,900 L0,900 Z"
+        fill="${p.hill1}" opacity=".55"/>
+
+  <!-- 水面 -->
+  <rect x="0" y="520" width="1600" height="420" fill="url(#water)" opacity=".82"/>
+  <path d="M0,610 C220,592 420,640 650,618 C900,594 1100,648 1320,628 C1480,614 1540,640 1600,622"
+        fill="none" stroke="rgba(255,255,255,.26)" stroke-width="5" opacity=".55"/>
+  <path d="M0,690 C240,666 470,710 710,684 C970,656 1140,716 1340,694 C1510,674 1560,708 1600,690"
+        fill="none" stroke="rgba(255,255,255,.18)" stroke-width="4" opacity=".45"/>
+
+  ${showCity ? `
+  <g transform="translate(140,468)" opacity=".46">
+    ${skyline
+      .map((b) => `<rect x="${b.x.toFixed(1)}" y="${(80 - b.h).toFixed(1)}" width="${b.w.toFixed(1)}" height="${b.h.toFixed(1)}" rx="2" fill="rgba(15,18,26,.95)"/>`)
+      .join("")}
+  </g>` : ""}
+
+  <!-- 雾气层 -->
+  <g filter="url(#soft)" opacity="${fog.toFixed(3)}">
+    <ellipse cx="420" cy="560" rx="520" ry="140" fill="rgba(255,255,255,.80)"/>
+    <ellipse cx="1120" cy="560" rx="620" ry="160" fill="rgba(255,255,255,.72)"/>
+  </g>
+
+  <!-- 颗粒 -->
+  <rect width="1600" height="900" filter="url(#grain)" opacity=".9"/>
+
+  <!-- 暗角 -->
+  <rect width="1600" height="900" fill="rgba(0,0,0,.18)"/>
+  <rect width="1600" height="900" fill="rgba(0,0,0,0)"/>
+  <radialGradient id="v" cx="50%" cy="40%" r="70%">
+    <stop offset="0" stop-color="rgba(0,0,0,0)"/>
+    <stop offset="1" stop-color="rgba(0,0,0,.34)"/>
+  </radialGradient>
+  <rect width="1600" height="900" fill="url(#v)" opacity=".68"/>
+</svg>`;
+
+          return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg.trim());
+        }
+
+        // ----------------------------
+        // 本地照片（离线）：城市 → 代表性景点（你上传的本地素材）
+        // ----------------------------
+        const LOCAL_SPOT_LIBRARY = {
+          北京: {
+            name: "故宫",
+            url: "./assets/beijing_gugong.jpg",
+            credit: "来源：本地素材（北京 · 故宫）",
+          },
+          九寨沟: {
+            // 多图：每次生成时会在下列照片中随机挑一张展示
+            name: "九寨沟风景区",
+            urls: [
+              "./assets/jiuzhaigou_wucaichi.jpg",
+              "./assets/jiuzhaigou_jianzhuhai.jpg",
+              "./assets/jiuzhaigou_wuhuahai.webp",
+              "./assets/jiuzhaigou_luweihai.jpg",
+              "./assets/jiuzhaigou_jinghai.jpeg",
+              "./assets/jiuzhaigou_changhai.jpg",
+            ],
+            spotNames: ["五彩池", "箭竹海", "五花海", "芦苇海", "镜海", "长海"],
+            credit: "来源：本地素材（九寨沟）",
+          },
+          呼伦贝尔: {
+            name: "呼伦贝尔大草原",
+            url: "./assets/hulunbuir_grassland.webp",
+            credit: "来源：本地素材（呼伦贝尔 · 呼伦贝尔大草原）",
+          },
+          成都: {
+            name: "安仁古镇景区",
+            url: "./assets/chengdu_anren.webp",
+            credit: "来源：本地素材（成都 · 安仁古镇景区）",
+          },
+          杭州: {
+            name: "西湖",
+            url: "./assets/xihu.jpg",
+            credit: "来源：本地素材（杭州 · 西湖）",
+          },
+          南京: {
+            name: "中山陵",
+            url: "./assets/zhongshanling.jpg",
+            credit: "来源：本地素材（南京 · 中山陵）",
+          },
+          上海: {
+            name: "东方明珠塔",
+            url: "./assets/oriental_pearl_tower.jpg",
+            credit: "来源：本地素材（上海 · 东方明珠塔）",
+          },
+          苏州: {
+            name: "苏州园林",
+            url: "./assets/suzhou_gardens.jpg",
+            credit: "来源：本地素材（苏州 · 苏州园林）",
+          },
+          武汉: {
+            name: "黄鹤楼",
+            url: "./assets/yellow_crane_tower.jpg",
+            credit: "来源：本地素材（武汉 · 黄鹤楼）",
+          },
+          山西: {
+            name: "五台山",
+            url: "./assets/shanxi_wutaishan.jpg",
+            credit: "来源：本地素材（山西 · 五台山）",
+          },
+          福州: {
+            name: "三坊七巷",
+            url: "./assets/fuzhou_sanfangqixiang.webp",
+            credit: "来源：本地素材（福州 · 三坊七巷）",
+          },
+        };
+
+        function resolveLocalPhoto(city) {
+          const c = (city || "").trim();
+          const key = c.endsWith("市") ? c.slice(0, -1) : c;
+          return LOCAL_SPOT_LIBRARY[key] || null;
+        }
+
+        function setCreditText(text) {
+          const t = text || "来源：—";
+          if (photoCreditA) photoCreditA.textContent = t;
+          if (photoCreditB) photoCreditB.textContent = t;
+        }
+
+        function setPhotoSrc(url) {
+          if (photoA) photoA.src = url;
+          if (photoB) photoB.src = url;
+        }
+
+        function setSpotName(name) {
+          const n = name || "城市风景";
+          if (spotTitleA) spotTitleA.textContent = n;
+          if (spotTitleB) spotTitleB.textContent = n;
+        }
+
+        function setSpotSubtitle(city, name) {
+          const sub = cityToSubtitle(city || "未知城市", name || "城市风景");
+          if (spotSubA) spotSubA.textContent = sub;
+          if (spotSubB) spotSubB.textContent = sub;
+        }
+
+        // ----------------------------
+        // 调色：值域 & 映射
+        // ----------------------------
+        const state = {
+          city: "",
+          seedSalt: 0,
+          photoSalt: 0,
+          baseMood: "—",
+          weather: null, // { name,tempC,code,isDay,kind,label,fetchedAt }
+          weatherReqId: 0,
+          weatherCache: Object.create(null), // key -> { ts, data }
+          userTouched: false,
+          sliders01: {
+            temp: 0.62, // 0..1
+            contrast: 0.56,
+            sat: 0.62,
+            expo: 0.52,
+            hi: 0.40,
+            sh: 0.54,
+            hue: 0.50,
+          },
+          recommended01: null,
+        };
+
+        function sliderToCssVars(s) {
+          // temp: 0..1 -> -1..1
+          const t = (s.temp - 0.5) * 2;
+          const warm = clamp(t, 0, 1);
+          const cool = clamp(-t, 0, 1);
+
+          const contrast = 0.68 + s.contrast * 1.0; // 0.68..1.68
+          const sat = 0.35 + s.sat * 1.95; // 0.35..2.30
+          const bright = 0.70 + s.expo * 0.95; // 0.70..1.65
+          const hue = (s.hue - 0.5) * 52; // -26..26 deg
+
+          const hl = 0.02 + s.hi * 0.32;
+          const sh = 0.06 + s.sh * 0.40;
+
+          // sepia 小幅度增强“胶片感”
+          const sep = 0.04 + (0.22 * warm + 0.06 * cool);
+
+          return {
+            "--f-contrast": contrast.toFixed(3),
+            "--f-sat": sat.toFixed(3),
+            "--f-bright": bright.toFixed(3),
+            "--f-hue": `${hue.toFixed(1)}deg`,
+            "--f-sep": sep.toFixed(3),
+            "--hl": hl.toFixed(3),
+            "--sh": sh.toFixed(3),
+            "--tempWarm": (0.02 + warm * 0.20).toFixed(3),
+            "--tempCool": (0.02 + cool * 0.20).toFixed(3),
+          };
+        }
+
+        function applyTone() {
+          const vars = sliderToCssVars(state.sliders01);
+          Object.keys(vars).forEach((k) => document.documentElement.style.setProperty(k, vars[k]));
+          updateKnobs();
+        }
+
+        function updateKnobs() {
+          const rows = Array.from(sliders.querySelectorAll(".srow"));
+          rows.forEach((row) => {
+            const key = row.getAttribute("data-key");
+            const v01 = state.sliders01[key];
+            const knob = row.querySelector(".knob");
+            const valEl = row.querySelector("[data-value]");
+            if (!knob || v01 == null) return;
+            knob.style.left = `${(v01 * 100).toFixed(2)}%`;
+
+            if (valEl) {
+              if (key === "temp") valEl.textContent = ((v01 - 0.5) * 200).toFixed(0);
+              if (key === "contrast") valEl.textContent = (0.68 + v01 * 1.0).toFixed(2);
+              if (key === "sat") valEl.textContent = (0.35 + v01 * 1.95).toFixed(2);
+              if (key === "expo") valEl.textContent = (0.70 + v01 * 0.95).toFixed(2);
+              if (key === "hi") valEl.textContent = (0.02 + v01 * 0.32).toFixed(2);
+              if (key === "sh") valEl.textContent = (0.06 + v01 * 0.40).toFixed(2);
+              if (key === "hue") valEl.textContent = ((v01 - 0.5) * 52).toFixed(0);
+            }
+          });
+        }
+
+        function makeRecommended(city, seedSalt, ctx) {
+          // “智能推荐”：时间（必有） + 天气（尽量获取） + 少量随机（用于“换一种推荐”）
+          const { hh } = nowHHMM();
+          const hour = (ctx && typeof ctx.hour === "number") ? ctx.hour : hh;
+          const weather = ctx?.weather || null;
+
+          // 1) 时间基线
+          let base = {
+            temp: 0.60,
+            contrast: 0.56,
+            sat: 0.62,
+            expo: 0.52,
+            hi: 0.40,
+            sh: 0.54,
+            hue: 0.50,
+          };
+
+          if (hour >= 5 && hour < 9) {
+            // 清晨：更暖更柔
+            base = { temp: 0.78, contrast: 0.52, sat: 0.64, expo: 0.56, hi: 0.50, sh: 0.58, hue: 0.50 };
+          } else if (hour >= 9 && hour < 16) {
+            // 白天：更通透
+            base = { temp: 0.60, contrast: 0.58, sat: 0.64, expo: 0.52, hi: 0.46, sh: 0.50, hue: 0.50 };
+          } else if (hour >= 16 && hour < 20) {
+            // 傍晚：金色
+            base = { temp: 0.84, contrast: 0.58, sat: 0.68, expo: 0.50, hi: 0.56, sh: 0.46, hue: 0.48 };
+          } else {
+            // 夜间：冷一点、对比更强
+            base = { temp: 0.44, contrast: 0.64, sat: 0.52, expo: 0.44, hi: 0.34, sh: 0.56, hue: 0.52 };
+          }
+
+          // 2) 天气修正
+          if (weather?.kind) {
+            const k = weather.kind;
+            if (k === "sunny") {
+              base.sat += 0.06;
+              base.contrast += 0.03;
+              base.sh -= 0.04;
+            } else if (k === "cloudy" || k === "overcast") {
+              base.contrast -= 0.05;
+              base.expo += 0.04;
+              base.sh += 0.06;
+            } else if (k === "rain") {
+              base.temp -= 0.06;
+              base.sat -= 0.10;
+              base.contrast += 0.05;
+              base.expo -= 0.02;
+              base.sh += 0.10;
+              base.hi -= 0.06;
+            } else if (k === "snow") {
+              base.temp -= 0.04;
+              base.sat -= 0.05;
+              base.expo += 0.06;
+              base.hi += 0.10;
+              base.contrast -= 0.04;
+            } else if (k === "fog") {
+              base.contrast -= 0.10;
+              base.sat -= 0.08;
+              base.expo += 0.06;
+              base.sh += 0.10;
+              base.temp += 0.02;
+            } else if (k === "thunder") {
+              base.temp -= 0.06;
+              base.sat -= 0.12;
+              base.contrast += 0.08;
+              base.expo -= 0.03;
+              base.hue += 0.03;
+            }
+          }
+
+          // 3) 温度微调（冷更冷 / 热更暖）
+          if (weather && typeof weather.tempC === "number") {
+            if (weather.tempC <= 0) base.temp -= 0.05;
+            if (weather.tempC >= 30) base.temp += 0.05;
+          }
+
+          // 4) “换一种推荐”的小扰动
+          const rand = mulberry32(hash32(`${city}__rec__${seedSalt}`));
+          const j = () => (rand() - 0.5) * 0.06; // ±0.03
+          const out = {
+            temp: clamp(base.temp + j(), 0, 1),
+            contrast: clamp(base.contrast + j(), 0, 1),
+            sat: clamp(base.sat + j(), 0, 1),
+            expo: clamp(base.expo + j(), 0, 1),
+            hi: clamp(base.hi + j(), 0, 1),
+            sh: clamp(base.sh + j(), 0, 1),
+            hue: clamp(base.hue + j(), 0, 1),
+          };
+          return out;
+        }
+
+        function rerollRecommendation() {
+          // 仅“换一种推荐”：不改照片、不改景点信息，只更新色调模块推荐值
+          if (!state.city) {
+            renderIdle("请先输入城市，再使用“换一种推荐”");
+            return;
+          }
+          state.seedSalt = (state.seedSalt + 1) % 9999;
+          state.userTouched = false;
+          state.recommended01 = makeRecommended(state.city, state.seedSalt, { hour: nowHHMM().hh, weather: state.weather });
+          state.sliders01 = { ...state.recommended01 };
+          applyTone();
+        }
+
+        function setCity(city) {
+          const normalized = (city || "").trim().replace(/\s+/g, "");
+          state.city = normalized;
+          if (!state.city) {
+            renderIdle("请输入城市以生成景点照片");
+            return;
+          }
+          // 每次点击“生成”都换一张图（仅对配置了多图的城市生效）
+          state.photoSalt = (state.photoSalt + 1) % 9999;
+          const rand = mulberry32(hash32(`${state.city}__ui__${state.seedSalt}`));
+          const meta = makeMeta();
+          state.baseMood = meta.mood;
+          // 切换城市时先清空天气，避免把上一个城市的天气误带过来
+          state.weather = null;
+
+          // 参数
+          pIso.textContent = fmtIso(rand);
+          pF.textContent = fmtF(rand);
+          pSs.textContent = fmtShutter(rand);
+          pWb.textContent = fmtWb(rand);
+
+          // 文案
+          if (metaDistA) metaDistA.textContent = meta.dist;
+          if (metaTimeA) metaTimeA.textContent = meta.time;
+          renderMoodText();
+
+          if (metaDistB) metaDistB.textContent = meta.dist;
+          if (metaTimeB) metaTimeB.textContent = meta.time;
+          renderMoodText();
+
+          // 景点名称与副标题：离线素材优先，否则使用本地生成兜底
+          const local = resolveLocalPhoto(state.city);
+          if (local?.url) {
+            setPhotoSrc(local.url);
+            setCreditText(local.credit || "来源：本地素材");
+            setSpotName(local.name || "城市景点");
+            setSpotSubtitle(state.city, local.name || "城市景点");
+          } else if (local?.urls && Array.isArray(local.urls) && local.urls.length) {
+            const r = mulberry32(hash32(`${state.city}__photo__${state.photoSalt}`));
+            const idx = Math.floor(r() * local.urls.length);
+            const pickedUrl = local.urls[idx] || local.urls[0];
+            const pickedName = (local.spotNames && local.spotNames[idx]) || local.name || "城市景点";
+            setPhotoSrc(pickedUrl);
+            setCreditText(local.credit || "来源：本地素材");
+            setSpotName(pickedName);
+            setSpotSubtitle(state.city, pickedName);
+          } else {
+            const fallbackUrl = svgScenery(state.city, state.seedSalt);
+            setPhotoSrc(fallbackUrl);
+            setCreditText("来源：离线生成（未收录该城市素材）");
+            setSpotName("城市风景");
+            setSpotSubtitle(state.city, "城市风景");
+          }
+
+          // 推荐调色
+          state.userTouched = false;
+          state.recommended01 = makeRecommended(state.city, state.seedSalt, { hour: nowHHMM().hh, weather: state.weather });
+          state.sliders01 = { ...state.recommended01 };
+          applyTone();
+
+          // 获取天气后再“智能补强”一次推荐（若用户已经手动调过，就不强行覆盖）
+          (async () => {
+            const req = ++state.weatherReqId;
+            const key = state.city;
+            const cached = state.weatherCache[key];
+            const TTL = 10 * 60 * 1000;
+            if (cached && Date.now() - cached.ts < TTL) {
+              if (state.weatherReqId !== req) return;
+              state.weather = cached.data;
+              renderMoodText();
+              state.recommended01 = makeRecommended(state.city, state.seedSalt, { hour: nowHHMM().hh, weather: state.weather });
+              if (!state.userTouched) {
+                state.sliders01 = { ...state.recommended01 };
+                applyTone();
+              }
+              return;
+            }
+
+            try {
+              const w = await fetchWeatherForPlace(state.city);
+              if (state.weatherReqId !== req) return;
+              state.weather = w;
+              state.weatherCache[key] = { ts: Date.now(), data: w };
+              renderMoodText();
+
+              state.recommended01 = makeRecommended(state.city, state.seedSalt, { hour: nowHHMM().hh, weather: state.weather });
+              if (!state.userTouched) {
+                state.sliders01 = { ...state.recommended01 };
+                applyTone();
+              }
+            } catch (_) {
+              // 天气获取失败：保持“仅按时间”的推荐即可
+            }
+          })();
+        }
+
+
+        // ----------------------------
+        // 滑杆交互（点击/拖动/键盘）
+        // ----------------------------
+        function setSlider01(key, v01) {
+          state.userTouched = true;
+          state.sliders01[key] = clamp(v01, 0, 1);
+          applyTone();
+        }
+
+        function pointerTo01(trackEl, clientX) {
+          const rect = trackEl.getBoundingClientRect();
+          const x = clamp(clientX - rect.left, 0, rect.width);
+          return rect.width <= 0 ? 0 : x / rect.width;
+        }
+
+        function bindSliders() {
+          const rows = Array.from(sliders.querySelectorAll(".srow"));
+          rows.forEach((row) => {
+            const key = row.getAttribute("data-key");
+            const track = row.querySelector(".track");
+            if (!key || !track) return;
+
+            track.addEventListener("pointerdown", (e) => {
+              if (e.isPrimary === false) return;
+              track.setPointerCapture(e.pointerId);
+              setSlider01(key, pointerTo01(track, e.clientX));
+            });
+            track.addEventListener("pointermove", (e) => {
+              if (e.buttons !== 1 && e.pointerType !== "touch") return;
+              setSlider01(key, pointerTo01(track, e.clientX));
+            });
+
+            // 键盘：左右微调
+            track.addEventListener("keydown", (e) => {
+              const step = 0.02;
+              if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                setSlider01(key, (state.sliders01[key] ?? 0.5) - step);
+              } else if (e.key === "ArrowRight") {
+                e.preventDefault();
+                setSlider01(key, (state.sliders01[key] ?? 0.5) + step);
+              }
+            });
+          });
+        }
+
+        // ----------------------------
+        // 横向分页（A ↔ B）：触屏滑动 + 鼠标拖拽 + 指示器点击
+        // ----------------------------
+        function pageWidth() {
+          return Math.max(1, pager ? pager.clientWidth : window.innerWidth || 1);
+        }
+
+        function currentPageIndex() {
+          if (!pager) return 0;
+          return Math.round(pager.scrollLeft / pageWidth());
+        }
+
+        function setActiveDot(idx) {
+          dotBtns.forEach((b) => b.classList.toggle("is-active", Number(b.dataset.dot) === idx));
+        }
+
+        function scrollToPage(idx) {
+          if (!pager) return;
+          const to = clamp(idx, 0, 1) * pageWidth();
+          pager.scrollTo({ left: to, behavior: "smooth" });
+        }
+
+        // 父页面控制 A/B 翻页（用于外层按钮/手势层切换）
+        window.addEventListener("message", (ev) => {
+          try {
+            const d = ev && ev.data;
+            if (!d || d.type !== "douyin-page") return;
+            const idx = currentPageIndex();
+            if (typeof d.index === "number") return scrollToPage(d.index);
+            if (typeof d.delta === "number") return scrollToPage(idx + d.delta);
+          } catch (_) {}
+        });
+
+        function bindPager() {
+          if (!pager) return;
+
+          // dots click
+          dotBtns.forEach((b) => {
+            b.addEventListener("click", () => scrollToPage(Number(b.dataset.dot) || 0));
+          });
+
+          // update dots on scroll
+          let raf = 0;
+          pager.addEventListener("scroll", () => {
+            window.cancelAnimationFrame(raf);
+            raf = window.requestAnimationFrame(() => setActiveDot(currentPageIndex()));
+          });
+
+          // =========================
+          // 横向翻页手势（移动端优先）
+          // - 兼容 iOS/iframe：pointer 事件不稳定时，用 touch 兜底
+          // - 只在“横向意图明显”时接管，避免影响卡片内部竖向滚动
+          // =========================
+          let tsx = 0;
+          let tsy = 0;
+          let tdx = 0;
+          let tdy = 0;
+          let taxis = null; // null | 'h' | 'v'
+          let tActive = false;
+          let edgeStart = false;
+
+          function shouldIgnoreGesture(target) {
+            try {
+              return !!(target && target.closest && target.closest("input,button,textarea,.track"));
+            } catch (_) {
+              return false;
+            }
+          }
+
+          pager.addEventListener(
+            "touchstart",
+            (e) => {
+              const t = e.touches && e.touches[0];
+              if (!t) return;
+              if (shouldIgnoreGesture(e.target)) return;
+              tActive = true;
+              taxis = null;
+              tsx = t.clientX;
+              tsy = t.clientY;
+              tdx = 0;
+              tdy = 0;
+              // iOS 右滑“返回”通常从左边缘触发：这里记录边缘起手，优先接管为横向翻页
+              edgeStart = tsx <= 18;
+            },
+            { passive: false }
+          );
+
+          pager.addEventListener(
+            "touchmove",
+            (e) => {
+              if (!tActive) return;
+              const t = e.touches && e.touches[0];
+              if (!t) return;
+              tdx = t.clientX - tsx;
+              tdy = t.clientY - tsy;
+
+              if (taxis === null) {
+                const ax = Math.abs(tdx);
+                const ay = Math.abs(tdy);
+                // 横向阈值更低：轻轻左右就能翻页（尤其“向右返回 A 页”）
+                // 边缘起手且向右：更早判定为横向，避免被系统“返回手势”吞掉
+                if (edgeStart && tdx > 4 && ax > ay * 0.9) taxis = "h";
+                else if (ax > 6 && ax > ay * 1.05) taxis = "h";
+                else if (ay > 10 && ay > ax * 1.2) taxis = "v";
+              }
+
+              // 横向判定后：阻止默认滚动（避免竖向容器抢手势导致“向右滑不动”）
+              if (taxis === "h") {
+                e.preventDefault();
+                try { e.stopPropagation(); } catch (_) {}
+              }
+            },
+            { passive: false }
+          );
+
+          pager.addEventListener(
+            "touchend",
+            () => {
+              if (!tActive) return;
+              const idx = currentPageIndex();
+              const ax = Math.abs(tdx);
+              const ay = Math.abs(tdy);
+              const horizontalEnough = ax > 14 && ax > ay * 0.9;
+              if (taxis === "h" || horizontalEnough) {
+                // 手指向左滑（tdx < 0） => 去右边页（idx+1）
+                // 手指向右滑（tdx > 0） => 回左边页（idx-1）
+                const delta = tdx < 0 ? 1 : -1;
+                scrollToPage(idx + delta);
+              }
+              tActive = false;
+              taxis = null;
+              tdx = 0;
+              tdy = 0;
+              edgeStart = false;
+            },
+            { passive: true }
+          );
+
+          pager.addEventListener(
+            "touchcancel",
+            () => {
+              tActive = false;
+              taxis = null;
+              tdx = 0;
+              tdy = 0;
+              edgeStart = false;
+            },
+            { passive: true }
+          );
+
+          // mouse/pointer drag to scroll（桌面端/部分安卓）
+          let dragging = false;
+          let startX = 0;
+          let startLeft = 0;
+          let startY = 0;
+          let active = false;
+
+          pager.addEventListener("pointerdown", (e) => {
+            if (e.isPrimary === false) return;
+            if (e.target && e.target.closest && e.target.closest("input,button,.track")) return;
+            active = true;
+            dragging = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = pager.scrollLeft;
+          });
+
+          pager.addEventListener("pointermove", (e) => {
+            if (!active) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            // 若明显是竖向意图，立刻退出手势跟踪，把控制权交回给内部滚动
+            if (!dragging && Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+              active = false;
+              return;
+            }
+            // 只有横向意图明显时才接管（避免影响 B 页内部竖向滚动）
+            if (!dragging) {
+              if (Math.abs(dx) < 10) return;
+              if (Math.abs(dx) < Math.abs(dy) * 1.1) return;
+              dragging = true;
+              try {
+                pager.setPointerCapture(e.pointerId);
+              } catch (_) {}
+            }
+            if (!dragging) return;
+            pager.scrollLeft = startLeft - dx;
+          });
+
+          function stopDrag() {
+            active = false;
+            dragging = false;
+          }
+          pager.addEventListener("pointerup", stopDrag);
+          pager.addEventListener("pointercancel", stopDrag);
+
+          // keyboard helper (desktop)
+          window.addEventListener("keydown", (e) => {
+            const ae = document.activeElement;
+            if (ae && ae.closest && ae.closest("input,.track")) return;
+            if (e.key === "ArrowLeft") scrollToPage(currentPageIndex() - 1);
+            if (e.key === "ArrowRight") scrollToPage(currentPageIndex() + 1);
+          });
+
+          // first paint
+          setActiveDot(0);
+        }
+
+        function bind() {
+          btnGo.addEventListener("click", () => {
+            const city = (cityInput.value || "").trim().replace(/\s+/g, "");
+            // 规范化输入，避免叠加（如“杭州北京”）
+            if (cityInput) cityInput.value = city;
+            setCity(city);
+          });
+          cityInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") btnGo.click();
+          });
+
+          btnReset.addEventListener("click", () => {
+            if (!state.recommended01) return;
+            state.sliders01 = { ...state.recommended01 };
+            applyTone();
+          });
+          btnRandom.addEventListener("click", () => {
+            // 不替换景点照片，只在当前照片基础上换一套色调推荐
+            const city = (cityInput.value || "").trim().replace(/\s+/g, "");
+            if (!state.city && city) {
+              // 用户没点 GO 但已输入城市：先初始化该城市，再换推荐
+              if (cityInput) cityInput.value = city;
+              setCity(city);
+            }
+            rerollRecommendation();
+          });
+        }
+
+        function svgPrompt(text) {
+          const t = String(text || "请输入城市").slice(0, 24);
+          const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6f0e6"/>
+      <stop offset="1" stop-color="#efe7d8"/>
+    </linearGradient>
+    <radialGradient id="m" cx="30%" cy="30%" r="80%">
+      <stop offset="0" stop-color="rgba(120,235,255,.35)"/>
+      <stop offset="1" stop-color="rgba(255,120,200,0)"/>
+    </radialGradient>
+    <radialGradient id="m2" cx="78%" cy="28%" r="75%">
+      <stop offset="0" stop-color="rgba(255,200,120,.30)"/>
+      <stop offset="1" stop-color="rgba(255,200,120,0)"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#g)"/>
+  <rect width="1600" height="900" fill="url(#m)" opacity=".9"/>
+  <rect width="1600" height="900" fill="url(#m2)" opacity=".9"/>
+  <rect x="110" y="120" width="1380" height="660" rx="46" fill="rgba(255,255,255,.55)" stroke="rgba(23,19,16,.12)" />
+  <text x="800" y="440" text-anchor="middle" font-family="ui-sans-serif,system-ui,-apple-system,PingFang SC,Microsoft YaHei,Arial" font-size="64" font-weight="900" fill="rgba(23,19,16,.82)">${t}</text>
+  <text x="800" y="520" text-anchor="middle" font-family="ui-sans-serif,system-ui,-apple-system,PingFang SC,Microsoft YaHei,Arial" font-size="26" font-weight="800" fill="rgba(23,19,16,.55)">例如：杭州 / 上海 / 南京 / 福州</text>
+</svg>`;
+          return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg.trim());
+        }
+
+        function renderIdle(message) {
+          // 参数区
+          if (pIso) pIso.textContent = "—";
+          if (pF) pF.textContent = "—";
+          if (pSs) pSs.textContent = "—";
+          if (pWb) pWb.textContent = "—";
+
+          state.baseMood = "—";
+          state.weather = null;
+
+          // 机位信息
+          if (metaDistA) metaDistA.textContent = "—";
+          if (metaTimeA) metaTimeA.textContent = "—";
+          if (metaMoodA) metaMoodA.textContent = "—";
+          if (metaDistB) metaDistB.textContent = "—";
+          if (metaTimeB) metaTimeB.textContent = "—";
+          if (metaMoodB) metaMoodB.textContent = "—";
+
+          // 文案与图片
+          setPhotoSrc(svgPrompt("请输入城市"));
+          setCreditText(message ? `提示：${message}` : "提示：请输入城市以生成景点照片");
+          setSpotName("请输入城市");
+          setSpotSubtitle("未选择城市", "请输入城市");
+        }
+
+        function init() {
+          bind();
+          bindSliders();
+          bindPager();
+          // 默认输入城市：九寨沟
+          cityInput.value = "九寨沟";
+          renderIdle("已为你默认填写：九寨沟");
+          // 自动触发一次生成（延迟一帧，避免初始化时序问题）
+          window.setTimeout(() => {
+            try { setCity("九寨沟"); } catch (_) {}
+          }, 0);
+        }
+
+        // 全局兜底：避免白屏
+        try {
+          init();
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error(error);
+          const fallback = document.createElement("div");
+          fallback.style.cssText =
+            "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f6f0e6;color:#171310;font-size:16px;padding:24px;text-align:center;z-index:9999;";
+          fallback.textContent = "哎呀，页面出错了，请刷新重试。";
+          document.body.innerHTML = "";
+          document.body.appendChild(fallback);
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -11,8 +11,6 @@
   const barsItem = document.querySelector('.bars-item');
   const douyinFrame = document.querySelector('.douyin-item .douyin-frame');
   const douyinItem = document.querySelector('.douyin-item');
-  const douyinGesture = document.querySelector('.douyin-item .douyin-gesture-layer');
-  const douyinAB = document.querySelector('.douyin-item .douyin-ab');
 
   // douyin 卡片当前页（0=A，1=B），用于外层手势/点按控制
   let douyinPage = 0;
@@ -47,12 +45,7 @@
         }
       } catch (_) {}
     }
-    if (!opts?.skipUi) {
-      const action = douyinPage === 0 ? 'douyin-page-a' : 'douyin-page-b';
-      douyinAB?.querySelectorAll?.('.dab-btn')?.forEach((b) => {
-        b.classList.toggle('is-active', b.getAttribute('data-action') === action);
-      });
-    }
+    // UI：已移除外层 A/B 按钮，仅保留卡片内部原生横滑切换
   }
 
   const BASE_W = 390;
@@ -137,13 +130,6 @@
       if (!target) return;
       const action = target.getAttribute('data-action');
       if (!action) return;
-
-      if (action === 'douyin-page-a' || action === 'douyin-page-b') {
-        e.preventDefault();
-        e.stopPropagation();
-        setDouyinPage(action === 'douyin-page-a' ? 0 : 1);
-        return;
-      }
 
       if (action === 'close-sheet') {
         closeComments();
@@ -265,6 +251,111 @@
       io2.observe(douyinItem);
     }
 
+    // 视频流：用本地 mp4 填充空卡片
+    // - 避免重复/空白：进入视口才挂载 src 并播放
+    // - 圆圈封面：若没有提供图片，则自动截取视频第一帧作为头像背景
+    if ('IntersectionObserver' in window) {
+      const thumbCache = new Map(); // src -> dataURL
+
+      function captureFirstFrame(src) {
+        if (!src) return Promise.resolve('');
+        if (thumbCache.has(src)) return Promise.resolve(thumbCache.get(src));
+        return new Promise((resolve) => {
+          try {
+            const v = document.createElement('video');
+            v.muted = true;
+            v.playsInline = true;
+            v.preload = 'auto';
+            v.src = src;
+
+            const cleanup = () => {
+              try { v.removeAttribute('src'); v.load(); } catch (_) {}
+            };
+
+            v.addEventListener(
+              'loadeddata',
+              () => {
+                try {
+                  const w = Math.max(2, v.videoWidth || 0);
+                  const h = Math.max(2, v.videoHeight || 0);
+                  const canvas = document.createElement('canvas');
+                  canvas.width = w;
+                  canvas.height = h;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) throw new Error('no ctx');
+                  ctx.drawImage(v, 0, 0, w, h);
+                  const url = canvas.toDataURL('image/jpeg', 0.82);
+                  thumbCache.set(src, url);
+                  cleanup();
+                  resolve(url);
+                } catch (_) {
+                  cleanup();
+                  resolve('');
+                }
+              },
+              { once: true }
+            );
+            v.addEventListener(
+              'error',
+              () => {
+                cleanup();
+                resolve('');
+              },
+              { once: true }
+            );
+          } catch (_) {
+            resolve('');
+          }
+        });
+      }
+
+      function applyCover(article, coverUrl) {
+        if (!coverUrl) return;
+        // 1) video poster（避免加载前黑屏）
+        const video = article.querySelector?.('video.feed-video');
+        if (video) {
+          try { video.poster = coverUrl; } catch (_) {}
+        }
+        // 2) 右侧圆圈封面（头像）
+        const avatar = article.querySelector?.('.ra-avatar');
+        if (avatar) {
+          try { avatar.style.setProperty('--ra-cover', `url("${coverUrl}")`); } catch (_) {}
+        }
+      }
+
+      const videoItems = Array.from(document.querySelectorAll('.feed-item[data-kind="video"]'));
+      const ioV = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const item = entry.target;
+            const video = item.querySelector?.('video.feed-video');
+            if (!video) return;
+            const src = video.getAttribute('data-src') || '';
+            const nowVisible = entry.isIntersecting && entry.intersectionRatio >= 0.62;
+
+            if (nowVisible) {
+              // 进视口：挂载 src 并播放
+              if (src && !video.src) {
+                try { video.src = src; } catch (_) {}
+              }
+              try {
+                const p = video.play();
+                if (p && typeof p.catch === 'function') p.catch(() => {});
+              } catch (_) {}
+
+              // 生成第一帧封面（无论是否已有头像图，都用第一帧更“去重复”）
+              captureFirstFrame(src).then((url) => applyCover(item, url));
+            } else {
+              // 出视口：暂停，降低开销
+              try { video.pause(); } catch (_) {}
+            }
+          });
+        },
+        { threshold: [0, 0.35, 0.62, 0.85, 1] }
+      );
+      videoItems.forEach((node) => ioV.observe(node));
+    }
+
     // 确保 iframe 加载完成后立刻对齐到当前页（避免 iOS 延迟加载导致第一次切页不生效）
     douyinFrame?.addEventListener?.('load', () => {
       try {
@@ -272,218 +363,11 @@
       } catch (_) {}
     });
 
-    // douyin 手势：解决 iframe 吃掉上下刷的问题
-    // - 竖向：不 preventDefault，让外层 feed 正常滚动
-    // - 横向：在手势层识别后，阻止外层抖动并通过 postMessage 让 iframe 切 A/B
-    if (douyinGesture && douyinFrame) {
-      let sx = 0;
-      let sy = 0;
-      let st = 0;
-      let tracking = false;
-      let axis = null; // null | 'h' | 'v'
-      let dx = 0;
-      let dy = 0;
-      let feedLock = false;
-      let feedPrevOverflow = '';
+    // 说明：已移除覆盖在 douyin iframe 上方的“手势层”方案。
+    // 原因：会遮挡 iframe，导致无法输入城市、也无法在卡片内原生横滑。
 
-      douyinGesture.addEventListener(
-        'pointerdown',
-        (e) => {
-          if (e.isPrimary === false) return;
-          tracking = true;
-          axis = null;
-          sx = e.clientX;
-          sy = e.clientY;
-          st = performance.now();
-          dx = 0;
-          dy = 0;
-        },
-        { passive: true }
-      );
-
-      douyinGesture.addEventListener(
-        'pointermove',
-        (e) => {
-          if (!tracking) return;
-          dx = e.clientX - sx;
-          dy = e.clientY - sy;
-          if (axis === null) {
-            const ax = Math.abs(dx);
-            const ay = Math.abs(dy);
-            // iOS 上手指横滑会带一点纵向噪声：放宽横向判定
-            if (ax > 6 && ax > ay * 1.05) axis = 'h';
-            else if (ay > 10 && ay > ax * 1.2) axis = 'v';
-          }
-          if (axis === 'h') {
-            // 一旦判定横向，锁住外层竖向滚动，避免 iOS 把手势交给滚动容器导致横滑失效
-            if (!feedLock && feed) {
-              feedLock = true;
-              feedPrevOverflow = feed.style.overflowY || '';
-              feed.style.overflowY = 'hidden';
-            }
-            // 横向翻页：阻止外层滚动抖动
-            try {
-              e.preventDefault();
-            } catch (_) {}
-          }
-        },
-        { passive: false }
-      );
-
-      douyinGesture.addEventListener(
-        'pointerup',
-        (e) => {
-          if (!tracking) return;
-          tracking = false;
-          if (feedLock && feed) {
-            feed.style.overflowY = feedPrevOverflow;
-            feedLock = false;
-          }
-          const dt = Math.max(1, performance.now() - st);
-          const vx = dx / dt; // px/ms
-          // 允许在 axis 未判定成功时，仍然用最终位移判断
-          const horizontalEnough = Math.abs(dx) > Math.abs(dy) * 0.9;
-          if (!(axis === 'h' || horizontalEnough)) return;
-
-          // 轻轻一滑即可切页：降低位移阈值，同时降低速度阈值
-          // （遵循 RN 手势体验：更偏“意图识别”，而不是必须大幅拖动）
-          const threshold = 16;
-          const fastFlick = Math.abs(vx) > 0.28 && Math.abs(dx) > 8;
-          if (Math.abs(dx) < threshold && !fastFlick) return;
-          const delta = dx < 0 ? 1 : -1;
-          setDouyinPage(douyinPage + delta);
-        },
-        { passive: true }
-      );
-      douyinGesture.addEventListener('pointercancel', () => (tracking = false), { passive: true });
-
-      // iOS/Safari 下 pointer 事件偶发不稳定：再补一套 touch 事件（与 RN 手势仲裁类似）
-      let tsx = 0;
-      let tsy = 0;
-      let tst = 0;
-      let tdx = 0;
-      let tdy = 0;
-      let taxis = null;
-      let tTracking = false;
-
-      douyinGesture.addEventListener(
-        'touchstart',
-        (e) => {
-          const t = e.touches?.[0];
-          if (!t) return;
-          tTracking = true;
-          taxis = null;
-          tsx = t.clientX;
-          tsy = t.clientY;
-          tst = performance.now();
-          tdx = 0;
-          tdy = 0;
-        },
-        { passive: true }
-      );
-
-      douyinGesture.addEventListener(
-        'touchmove',
-        (e) => {
-          if (!tTracking) return;
-          const t = e.touches?.[0];
-          if (!t) return;
-          tdx = t.clientX - tsx;
-          tdy = t.clientY - tsy;
-          if (taxis === null) {
-            const ax = Math.abs(tdx);
-            const ay = Math.abs(tdy);
-            if (ax > 6 && ax > ay * 1.05) taxis = 'h';
-            else if (ay > 10 && ay > ax * 1.2) taxis = 'v';
-          }
-          if (taxis === 'h') {
-            if (!feedLock && feed) {
-              feedLock = true;
-              feedPrevOverflow = feed.style.overflowY || '';
-              feed.style.overflowY = 'hidden';
-            }
-            // 横向：阻止外层滚动抖动
-            e.preventDefault();
-            e.stopPropagation();
-          }
-        },
-        { passive: false }
-      );
-
-      douyinGesture.addEventListener(
-        'touchend',
-        () => {
-          if (!tTracking) return;
-          tTracking = false;
-          if (feedLock && feed) {
-            feed.style.overflowY = feedPrevOverflow;
-            feedLock = false;
-          }
-          const dt = Math.max(1, performance.now() - tst);
-          const vx = tdx / dt;
-          const horizontalEnough = Math.abs(tdx) > Math.abs(tdy) * 0.9;
-          if (!(taxis === 'h' || horizontalEnough)) return;
-
-          const threshold = 16;
-          const fastFlick = Math.abs(vx) > 0.28 && Math.abs(tdx) > 8;
-          if (Math.abs(tdx) < threshold && !fastFlick) return;
-          const delta = tdx < 0 ? 1 : -1;
-          setDouyinPage(douyinPage + delta);
-        },
-        { passive: true }
-      );
-
-      // 点按切换：点击（几乎不移动）即可 A/B 互切
-      let tapStartX = 0;
-      let tapStartY = 0;
-      let tapStartT = 0;
-      douyinGesture.addEventListener(
-        'touchstart',
-        (e) => {
-          const t = e.touches?.[0];
-          if (!t) return;
-          tapStartX = t.clientX;
-          tapStartY = t.clientY;
-          tapStartT = performance.now();
-        },
-        { passive: true }
-      );
-      douyinGesture.addEventListener(
-        'touchend',
-        (e) => {
-          const t = e.changedTouches?.[0];
-          if (!t) return;
-          const dx0 = t.clientX - tapStartX;
-          const dy0 = t.clientY - tapStartY;
-          const dt0 = performance.now() - tapStartT;
-          // 很小的移动 + 较短时间 -> 认为是 tap
-          if (dt0 > 320) return;
-          if (Math.abs(dx0) > 10 || Math.abs(dy0) > 10) return;
-          setDouyinPage(1 - douyinPage);
-        },
-        { passive: true }
-      );
-    }
-
-    // 解决：进入 douyin iframe 后无法上拉/下拽切换下一条
-    // iframe 会吞掉竖向手势，因此让 iframe 通过 postMessage 请求外层滚动
-    window.addEventListener('message', (ev) => {
-      const data = ev?.data;
-      if (!data || data.type !== 'feed-swipe') return;
-      if (!douyinFrame || ev.source !== douyinFrame.contentWindow) return;
-      if (!feed) return;
-      if (sheetComments?.classList?.contains('is-active')) return;
-      if (currentRoot !== 'home' || currentTab !== 'recommend') return;
-
-      // 快滑：直接跳到上一条/下一条并吸附
-      const h = Math.max(1, feed.clientHeight);
-      const items = Array.from(feed.querySelectorAll('.feed-item'));
-      if (!items.length) return;
-      const idx = Math.round(feed.scrollTop / h);
-      const next = data.dir === 'up' ? idx + 1 : idx - 1;
-      const clamped = Math.max(0, Math.min(items.length - 1, next));
-      feed.scrollTo({ top: clamped * h, behavior: 'smooth' });
-    });
+    // 说明：曾有“iframe 内上/下滑请求外层翻页”的兼容方案（feed-swipe），
+    // 但当前 dy/douyin.html 已不发送该消息，故移除以保持代码清晰。
 
     // 左右滑动切换栏目（更像抖音“滑动切页”的手感）
     let startX = 0;
@@ -493,8 +377,6 @@
     function onPointerDown(e) {
       // 仅主指针，避免多指干扰
       if (e.isPrimary === false) return;
-      // 在 douyin 手势层上滑动时，不触发“左右切顶部栏目”
-      if (e.target?.closest?.('.douyin-gesture-layer')) return;
       tracking = true;
       startX = e.clientX;
       startY = e.clientY;
@@ -508,8 +390,6 @@
     function onPointerUp(e) {
       if (!tracking) return;
       tracking = false;
-      // 在 douyin 手势层上滑动时，不触发“左右切顶部栏目”
-      if (e.target?.closest?.('.douyin-gesture-layer')) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       const threshold = 44; // 触发距离（px）

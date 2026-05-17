@@ -411,7 +411,8 @@
         flex-direction:column;
       }
       .handle{
-        height:34px;
+        /* 把手加高，解决“只显示地图时很难再拉起” */
+        height:48px;
         display:flex;
         align-items:center;
         justify-content:center;
@@ -710,6 +711,25 @@
         /* ===========================
            Mock 数据（坐标 x,y：0~100）
         ============================ */
+        // 机位打卡的“真实视频池”：用于填满抽屉内容，且尽量分散不连续重复
+        // 说明：
+        // - poster 不强制写死，渲染时会优先抽取视频第一帧作为封面（ensureVideoThumb）
+        // - 将你新增的视频(u*) + 之前已有的(lwh*, jzh*) 混合，避免单一素材重复感
+        const VIDEO_POOL = [
+          // 精简版：只围绕 4 条视频循环（避免素材过多导致包体膨胀）
+          "assets/lwh1.mp4",
+          "assets/lwh2.mp4",
+          "assets/lwh3.mp4",
+          "assets/lwh4.mp4",
+        ];
+        const VIDEO_THUMBS = {
+          // 预先离线抽取的首帧（更稳定：即使 file:// 打开也不会空白）
+          "assets/lwh1.mp4": "assets/thumbs/lwh1.jpg",
+          "assets/lwh2.mp4": "assets/thumbs/lwh2.jpg",
+          "assets/lwh3.mp4": "assets/thumbs/lwh3.jpg",
+          "assets/lwh4.mp4": "assets/thumbs/lwh4.jpg",
+        };
+
         const MARKERS = [
           {
             id: "jzh",
@@ -725,15 +745,16 @@
             x: 58,
             y: 46,
             likes: 13200,
+            // 景色浮球封面：使用离线抽取的首帧截图（不依赖运行时抽帧）
             coverType: "file",
-            coverSrc: "assets/jzhzp.jpeg",
+            coverSrc: "assets/thumbs/lwh1.jpg",
             // “封面下的视频”
             photos: [
-              { id: "jzh_v1", type: "video", src: "assets/jzh1.mp4", poster: "assets/jzh1.jpg", ratio: 1.25, user: mockUser(101), like: 1320 },
-              { id: "jzh_v2", type: "video", src: "assets/jzh2.mp4", poster: "assets/jzh2.jpg", ratio: 1.25, user: mockUser(155), like: 980 },
-              { id: "jzh_v3", type: "video", src: "assets/jzh3.mp4", poster: "assets/jzh3.jpg", ratio: 1.25, user: mockUser(203), like: 1660 },
-              { id: "jzh_v4", type: "video", src: "assets/jzh4.mp4", poster: "assets/jzh4.jpg", ratio: 1.25, user: mockUser(77), like: 740 },
-              { id: "jzh_v5", type: "video", src: "assets/jzh5.mp4", poster: "assets/jzh5.jpg", ratio: 1.25, user: mockUser(41), like: 1100 },
+              // 精简版：仅保留 4 条循环视频（poster 先用 lwh.jpeg，渲染时会尝试抽第一帧替换）
+              { id: "lwh_v1", type: "video", src: "assets/lwh1.mp4", poster: "assets/thumbs/lwh1.jpg", ratio: 1.25, user: mockUser(101), like: 1320 },
+              { id: "lwh_v2", type: "video", src: "assets/lwh2.mp4", poster: "assets/thumbs/lwh2.jpg", ratio: 1.25, user: mockUser(155), like: 980 },
+              { id: "lwh_v3", type: "video", src: "assets/lwh3.mp4", poster: "assets/thumbs/lwh3.jpg", ratio: 1.25, user: mockUser(203), like: 1660 },
+              { id: "lwh_v4", type: "video", src: "assets/lwh4.mp4", poster: "assets/thumbs/lwh4.jpg", ratio: 1.25, user: mockUser(77), like: 740 },
             ],
           },
           {
@@ -749,8 +770,10 @@
             x: 26,
             y: 36,
             likes: 12800,
+            coverType: "file",
+            coverSrc: "assets/thumbs/lwh1.jpg",
             coverSeed: 12,
-            photos: makePhotos("m1", 16, 21),
+            photos: makeMedia("m1", 16, 21),
           },
           {
             id: "m2",
@@ -765,8 +788,10 @@
             x: 62,
             y: 44,
             likes: 8600,
+            coverType: "file",
+            coverSrc: "assets/thumbs/lwh2.jpg",
             coverSeed: 33,
-            photos: makePhotos("m2", 14, 77),
+            photos: makeMedia("m2", 14, 77),
           },
           {
             id: "m3",
@@ -781,8 +806,10 @@
             x: 50,
             y: 66,
             likes: 4200,
+            coverType: "file",
+            coverSrc: "assets/thumbs/lwh3.jpg",
             coverSeed: 64,
-            photos: makePhotos("m3", 12, 8),
+            photos: makeMedia("m3", 12, 8),
           },
           {
             id: "m4",
@@ -797,8 +824,10 @@
             x: 78,
             y: 30,
             likes: 15600,
+            coverType: "file",
+            coverSrc: "assets/thumbs/lwh4.jpg",
             coverSeed: 91,
-            photos: makePhotos("m4", 18, 103),
+            photos: makeMedia("m4", 18, 103),
           },
           {
             id: "m5",
@@ -813,8 +842,10 @@
             x: 40,
             y: 22,
             likes: 6900,
+            coverType: "file",
+            coverSrc: "assets/thumbs/lwh2.jpg",
             coverSeed: 5,
-            photos: makePhotos("m5", 13, 44),
+            photos: makeMedia("m5", 13, 44),
           },
         ];
 
@@ -830,17 +861,31 @@
           ],
         ];
 
-        function makePhotos(markerId, count, seed) {
+        function makeMedia(markerId, count, seed) {
           const list = [];
+          const pool = VIDEO_POOL;
+          const start = Math.abs(seed * 7 + markerId.length * 11) % pool.length;
+          const step = 3; // pool 只有 4 个：用 step=3 轮转更均匀
+          let lastSrc = "";
+
           for (let i = 0; i < count; i++) {
-            const ratio = pick([0.78, 0.86, 1.0, 1.22, 1.34], seed + i); // 高宽比（height/width）
             const uSeed = (seed * 17 + i * 13) % 999;
+            // 选择一个视频：避免连续重复（即使循环，也跳一位）
+            let idx = (start + i * step) % pool.length;
+            let src = pool[idx];
+            if (src === lastSrc) {
+              idx = (idx + 1) % pool.length;
+              src = pool[idx];
+            }
+            lastSrc = src;
+
             list.push({
-              id: markerId + "_p" + i,
+              id: markerId + "_v" + i,
+              type: "video",
+              src,
+              ratio: 1.25,
               user: mockUser(uSeed),
               like: Math.floor(80 + (uSeed * 37) % 2200),
-              ratio,
-              imageDataUrl: svgPhotoDataUrl(uSeed),
             });
           }
           return list;
@@ -1188,6 +1233,74 @@
           return arr[Math.abs(seed) % arr.length];
         }
 
+        function hashSeed(input) {
+          // 用于生成稳定的占位封面（避免 file:// 下抽帧失败导致黑块）
+          const s = String(input || "");
+          let h = 0;
+          for (let i = 0; i < s.length; i++) {
+            h = (h * 31 + s.charCodeAt(i)) >>> 0;
+          }
+          return h % 999;
+        }
+
+        function fillMarkerMedia(marker, minCount) {
+          // 自动把“机位打卡”抽屉内容补满：优先不重复、避免连续重复
+          if (!marker) return;
+          if (!Array.isArray(marker.photos)) marker.photos = [];
+          const list = marker.photos;
+
+          const used = new Set();
+          for (const it of list) {
+            if (it && it.type === "video" && it.src) used.add(it.src);
+          }
+
+          let lastSrc = "";
+          for (let i = list.length - 1; i >= 0; i--) {
+            if (list[i] && list[i].type === "video" && list[i].src) {
+              lastSrc = list[i].src;
+              break;
+            }
+          }
+
+          const start = hashSeed(marker.id) % VIDEO_POOL.length;
+          const step = 7; // 与 18 互质，分散更均匀
+          let guard = 0;
+          while (list.length < minCount && guard < VIDEO_POOL.length * 4) {
+            const idx = (start + guard * step) % VIDEO_POOL.length;
+            let src = VIDEO_POOL[idx];
+            // 避免连续重复
+            if (src === lastSrc) {
+              guard++;
+              continue;
+            }
+            // 在一轮没用完前，尽量不重复；用完后允许重复
+            if (used.size < VIDEO_POOL.length && used.has(src)) {
+              guard++;
+              continue;
+            }
+            used.add(src);
+            lastSrc = src;
+
+            const uSeed = hashSeed(marker.id + "_" + list.length);
+            list.push({
+              id: `${marker.id}_auto${list.length}`,
+              type: "video",
+              src,
+              ratio: 1.25,
+              poster: VIDEO_THUMBS[src] || undefined,
+              user: mockUser(uSeed),
+              like: Math.floor(80 + (uSeed * 37) % 2200),
+            });
+            guard++;
+          }
+        }
+
+        // 兜底：如果某些机位点的“抽屉内容”为空/不足，自动补齐到 14 条
+        //（只保留 4 条循环视频时，补太多会显得“大量重复”）
+        try {
+          MARKERS.forEach((m) => fillMarkerMedia(m, 14));
+        } catch (_) {}
+
         function formatLikes(n) {
           if (n >= 10000) return (n / 10000).toFixed(n >= 100000 ? 0 : 1) + "w";
           if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
@@ -1315,6 +1428,7 @@
         app.appendChild(root);
 
         /* 渲染 */
+        prewarmThumbs();
         renderAll();
 
         // 如果作为 iframe 被“推荐流卡片”加载：默认不自动播放入场动画，等待父页面通知再播放
@@ -1353,8 +1467,8 @@
           // 下拉框“取消”但留一个可见把手（不然收起后无法再拉起）
           try {
             const h = panel.getBoundingClientRect().height || 0;
-            // 露出约 26px（含 handle 区），其余隐藏到屏幕下方
-            return Math.max(0, Math.round(h - 26));
+            // 露出更多（含 handle 区），避免过小导致难以拖拽
+            return Math.max(0, Math.round(h - 52));
           } catch (_) {
             return 0;
           }
@@ -1684,7 +1798,9 @@
 
           const ring = el("div", { className: "ring" });
           const cover = el("img", { className: "cover", alt: "" });
-          cover.src = m.coverType === "file" ? m.coverSrc : svgCoverDataUrl(m.coverSeed);
+          // 圆圈封面：优先 视频第一帧（video）> 真实图（file）> SVG 占位（seed）
+          //（需要“景色浮球截图”时，video 模式更贴合）
+          cover.src = m.coverType === "file" ? (m.coverSrc || svgCoverDataUrl(m.coverSeed)) : svgCoverDataUrl(m.coverSeed);
           cover.style.width = size + "px";
           cover.style.height = size + "px";
           cover.draggable = false;
@@ -1754,20 +1870,41 @@
             if (p.type === "video") {
               const video = document.createElement("video");
               video.className = "video";
-              // 关键：不要在渲染阶段就加载 mp4（否则每次重置/重渲染会触发加载中断，出现 net::ERR_ABORTED）
-              // 只在用户点击时才设置 src 并播放
-              video.preload = "none";
+              // 关键修复：部分浏览器（尤其 iOS/Safari、file://）在 video 未设置 src 时不会显示 poster，
+              // 会导致“机位视频卡片看起来是空白”。这里统一预载 metadata 并设置 src，以保证封面可见。
+              video.preload = "metadata";
               video.playsInline = true;
               video.muted = true;
               video.loop = true;
-              // 默认使用 poster（静态图），避免抽帧/解码导致的兼容问题
-              if (p.poster) video.poster = p.poster;
               video.style.aspectRatio = `1 / ${p.ratio || 1.25}`;
               video.style.objectFit = "cover";
               video.setAttribute("data-src", p.src);
+              try {
+                if (p.src) video.src = p.src;
+              } catch (_) {}
               video.addEventListener("error", () => {
                 try { showToast("视频加载失败：请检查 mp4 是否可访问 / 格式 / Range"); } catch (_) {}
               });
+
+              // 封面策略：优先用“视频第一帧”生成 poster，避免所有卡片重复同一张封面
+              // 仅使用 transform/opacity 动效，不影响此处封面逻辑
+              try {
+                const ds = p.src;
+                // 先用 fallback（如有）占位；
+                // 若未提供 poster，则用稳定的 SVG 占位图兜底（特别是 file:// 打开时抽帧可能失败）
+                if (p.poster) {
+                  video.poster = p.poster;
+                } else if (VIDEO_THUMBS && VIDEO_THUMBS[ds]) {
+                  video.poster = VIDEO_THUMBS[ds];
+                } else {
+                  video.poster = svgPhotoDataUrl(hashSeed(p.id || p.src));
+                }
+                ensureVideoThumb(ds).then((url) => {
+                  if (!url) return;
+                  // 若用户已经点开播放，poster 已不重要，但设置也无害
+                  video.poster = url;
+                });
+              } catch (_) {}
 
               const badge = el("div", { className: "playBadge", "aria-hidden": "true" });
               badge.innerHTML =
@@ -1777,11 +1914,6 @@
               // 触屏点击：播放/暂停（保持 muted，避免手势限制与噪音）
               card.addEventListener("click", () => {
                 try {
-                  // 首次点击才挂载 src，避免自动加载导致的中断报错
-                  if (!video.src) {
-                    const ds = video.getAttribute("data-src");
-                    if (ds) video.src = ds;
-                  }
                   if (video.paused) {
                     video.play();
                     badge.style.opacity = "0";
@@ -1841,6 +1973,8 @@
           unlockMoreMarkers();
           renderMarkers();
           renderFeed();
+          // 每次切换地点：把抽屉里的滚动位置重置到顶部（避免“上次滑到底，这次打开还在底部”）
+          try { scroll.scrollTop = 0; } catch (_) {}
           springPulse(id);
           const m = MARKERS.find((x) => x.id === id);
           if (m) {
@@ -1859,6 +1993,15 @@
               if (!rgb) return;
               document.documentElement.style.setProperty("--focus-rgb", `${rgb.r},${rgb.g},${rgb.b}`);
               focusGlow.classList.add("show");
+            });
+          } else if (marker.coverType === "video" && marker.coverVideo) {
+            ensureVideoThumb(marker.coverVideo).then((url) => {
+              if (!url) return;
+              extractEdgeRgb(url).then((rgb) => {
+                if (!rgb) return;
+                document.documentElement.style.setProperty("--focus-rgb", `${rgb.r},${rgb.g},${rgb.b}`);
+                focusGlow.classList.add("show");
+              });
             });
           } else {
             focusGlow.classList.remove("show");
@@ -1976,6 +2119,16 @@
               resolve(null);
             }
           });
+        }
+
+        function prewarmThumbs() {
+          // 仅 4 条循环视频：页面启动时预热抽帧
+          // 目的：景色浮球/抽屉封面不空白，且首屏更稳定
+          try {
+            (VIDEO_POOL || []).forEach((s) => {
+              try { ensureVideoThumb(s); } catch (_) {}
+            });
+          } catch (_) {}
         }
 
         function unlockMoreMarkers() {
@@ -2332,8 +2485,7 @@
           const onDown = (e) => {
             // 点在 marker 上时不触发拖拽，保持点击选择体验
             if (e.target && e.target.closest && e.target.closest(".marker")) return;
-            // 滑动地图时：下拉框（照片面板）自动取消/收起
-            try { collapsePanelPeek(260); } catch (_) {}
+            // 修复：地图拖拽不再强制把抽屉收到底（否则容易出现“只剩地图、抽屉很难再拉起”）
             dragging = true;
             state.userInteracted = true;
             startX = e.clientX;

@@ -299,13 +299,13 @@ body{
 .douyin-item.is-peek::before{ opacity: 1; }
 
 .douyin-item .douyin-frame,
-.douyin-item .douyin-ab{
+.douyin-item .douyin-swipe-hint{
   will-change: transform, opacity;
 }
 .douyin-item.is-peek .douyin-frame{
   animation: dyPeekFrame 720ms cubic-bezier(.2,.9,.2,1) both;
 }
-.douyin-item.is-peek .douyin-ab{
+.douyin-item.is-peek .douyin-swipe-hint{
   animation: dyPeekControls 720ms cubic-bezier(.2,.9,.2,1) both;
 }
 @keyframes dyPeekFrame{
@@ -321,7 +321,7 @@ body{
 
 @media (prefers-reduced-motion: reduce){
   .douyin-item.is-peek .douyin-frame,
-  .douyin-item.is-peek .douyin-ab{ animation: none; }
+  .douyin-item.is-peek .douyin-swipe-hint{ animation: none; }
   .douyin-item::before{ transition: none; }
 }
 .douyin-frame{
@@ -331,66 +331,59 @@ body{
   height:100%;
   border:0;
   background:#f6f0e6;
-  /* 关键：iframe 会吞掉竖向手势，导致推荐流无法上下刷
-     默认禁用 iframe 指针事件，让上下滑动交给外层 .feed */
-  pointer-events:none;
+  /* 允许在卡片内输入/滑动（城市输入 + A/B 横滑） */
+  pointer-events:auto;
 }
 
-/* 手势层：竖向允许外层滚动；横向识别后触发 iframe 内部翻页（通过 postMessage） */
-.douyin-gesture-layer{
-  position:absolute;
-  inset:0;
-  z-index: 40;
-  background: transparent;
-  touch-action: pan-y; /* 默认允许竖向滚动 */
-}
+/* 已移除手势层（会遮挡 iframe，导致无法输入城市/无法在卡片内横滑） */
 
-.douyin-ab{
+.douyin-swipe-hint{
   position:absolute;
   left: 50%;
   bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 45;
   display:flex;
-  gap: 14px;
-  width: min(360px, calc(100% - 28px));
-  padding: 0;
-  background: transparent;
+  align-items:center;
+  gap: 10px;
+  width: auto;
+  pointer-events:none; /* 不挡住 iframe 输入/滑动 */
 }
-.dab-btn{
-  appearance:none;
-  border: 1px solid rgba(255,255,255,.18);
-  /* 参照图：右侧主按钮更宽，左侧次按钮更窄 */
-  flex: 0.44 1 0;
-  height: 54px;
+.dsh-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height: 40px;
+  padding: 0 16px;
   border-radius: 999px;
-  background: rgba(255,255,255,.06);
-  color: rgba(234,244,255,.78);
-  font-weight: 800;
-  letter-spacing: .2px;
-  font-size: 16px;
-  box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,.06),
-    0 10px 30px rgba(0,0,0,.20);
-  backdrop-filter: blur(12px);
-  white-space: nowrap;
-  transition:
-    background 160ms ease,
-    color 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    flex 220ms ease;
+  background: rgba(0,0,0,.26);
+  border: 1px solid rgba(255,255,255,.16);
+  color: rgba(255,255,255,.90);
+  font-weight: 850;
+  letter-spacing: .6px;
+  font-size: 13px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 40px rgba(0,0,0,.26);
 }
-.dab-btn.is-active{
-  flex: 0.56 1 0;
-  background: rgba(255,255,255,.96);
-  color: rgba(12,24,38,.92);
-  border-color: rgba(255,255,255,.10);
-  box-shadow:
-    0 18px 36px rgba(0,0,0,.28),
-    inset 0 0 0 1px rgba(255,255,255,.65);
+.dsh-arrow{
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgba(255,255,255,.72);
+  border-bottom: 2px solid rgba(255,255,255,.72);
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,.25));
+  opacity: .9;
 }
-.dab-btn:active{ transform: translateY(1px); }
+.dsh-arrow.left{ transform: rotate(135deg); }
+.dsh-arrow.right{ transform: rotate(-45deg); }
+
+/* “轻微左右移动”提示动画（只动 transform/opacity） */
+.douyin-swipe-hint{
+  animation: dyHint 1.45s ease-in-out infinite;
+}
+@keyframes dyHint{
+  0%,100%{ transform: translateX(-50%) translate3d(0,0,0); opacity: .86; }
+  50%{ transform: translateX(-50%) translate3d(12px,0,0); opacity: 1; }
+}
 .fake-video{
   position:absolute;
   inset:-40px;
@@ -398,6 +391,15 @@ body{
   filter: saturate(1.15) contrast(1.05);
   transform: scale(1.05);
   animation: mv 8s ease-in-out infinite;
+}
+.feed-video{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit: cover;
+  background:#000;
+  transform: scale(1.01);
 }
 .fake-video::after{
   content:"";
@@ -440,7 +442,7 @@ body{
   border-radius: 999px;
   border: 2px solid rgba(255,255,255,.9);
   background:
-    url("../assets/dy_icons/head-image.jpeg") center/cover no-repeat,
+    var(--ra-cover, url("../assets/dy_icons/head-image.jpeg")) center/cover no-repeat,
     radial-gradient(circle at 30% 30%, rgba(255,255,255,.30), rgba(255,255,255,0) 58%),
     linear-gradient(135deg,#1f2f7a,#0b1b3a);
   box-shadow: 0 18px 34px rgba(0,0,0,.45);

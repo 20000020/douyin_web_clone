@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="380" viewBox="0 0 900 380">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#091a44"/>
+      <stop offset="0.6" stop-color="#09102a"/>
+      <stop offset="1" stop-color="#06102a"/>
+    </linearGradient>
+    <filter id="grain" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="
+        1 0 0 0 0
+        0 1 0 0 0
+        0 0 1 0 0
+        0 0 0 .10 0"/>
+    </filter>
+    <linearGradient id="road" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6df2ff" stop-opacity=".25"/>
+      <stop offset="0.5" stop-color="#6df2ff" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#6df2ff" stop-opacity=".25"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a214f"/>
+      <stop offset="1" stop-color="#07163a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="900" height="380" rx="0" fill="url(#bg)"/>
+  <rect width="900" height="380" fill="url(#water)" opacity=".55"/>
+  <rect width="900" height="380" filter="url(#grain)" opacity=".9"/>
+
+  <!-- 水库/水面块 -->
+  <path d="M680 40c80 8 150 60 175 120 18 44 5 104-38 150-42 45-108 70-175 62-60-7-110-38-128-86-22-58 10-110 52-154 30-32 70-60 114-92z"
+        fill="#081a3f" opacity=".62"/>
+  <path d="M680 52c70 8 130 55 152 108 16 38 4 90-33 130-37 40-95 62-152 56-52-5-96-32-112-74-19-49 9-92 46-130 27-28 60-52 99-90z"
+        fill="#0a214f" opacity=".55"/>
+
+  <!-- 路网（抽象，类似截图的细线） -->
+  <g fill="none" stroke="url(#road)" stroke-linecap="round">
+    <path d="M40 70H320" stroke-width="10" opacity=".12"/>
+    <path d="M40 70H320" stroke-width="2" opacity=".9"/>
+    <path d="M70 30V170" stroke-width="2" opacity=".65"/>
+    <path d="M120 20V190" stroke-width="2" opacity=".55"/>
+    <path d="M165 10V210" stroke-width="2" opacity=".45"/>
+    <path d="M210 22V208" stroke-width="2" opacity=".45"/>
+    <path d="M260 32V220" stroke-width="2" opacity=".55"/>
+    <path d="M300 58V240" stroke-width="2" opacity=".48"/>
+
+    <path d="M320 120C420 90 520 110 610 120" stroke-width="2" opacity=".70"/>
+    <path d="M330 160C430 132 520 150 620 168" stroke-width="2" opacity=".55"/>
+    <path d="M340 210C440 178 520 196 630 236" stroke-width="2" opacity=".45"/>
+
+    <path d="M520 30V340" stroke-width="2" opacity=".45"/>
+    <path d="M580 24V340" stroke-width="2" opacity=".38"/>
+    <path d="M640 20V340" stroke-width="2" opacity=".35"/>
+    <path d="M700 16V340" stroke-width="2" opacity=".30"/>
+
+    <path d="M420 60H860" stroke-width="2" opacity=".55"/>
+    <path d="M420 100H860" stroke-width="2" opacity=".50"/>
+    <path d="M420 140H860" stroke-width="2" opacity=".42"/>
+    <path d="M420 180H860" stroke-width="2" opacity=".40"/>
+    <path d="M420 220H860" stroke-width="2" opacity=".38"/>
+    <path d="M420 260H860" stroke-width="2" opacity=".36"/>
+    <path d="M420 300H860" stroke-width="2" opacity=".34"/>
+  </g>
+
+  <!-- 小地标点 -->
+  <g opacity=".35">
+    <circle cx="190" cy="152" r="4" fill="#7be8ff"/>
+    <circle cx="238" cy="120" r="3" fill="#7be8ff"/>
+    <circle cx="440" cy="210" r="3" fill="#7be8ff"/>
+  </g>
+</svg>
+
