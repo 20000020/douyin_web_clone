@@ -1,0 +1,1493 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <title>抖音卡片 · 摄影时刻</title>
+    <style>
+      :root {
+        /* 参考图风格：奶油玻璃 + 纸张质感 */
+        --paper0: #f6f0e6;
+        --paper1: #efe7d8;
+        --ink: rgba(23, 19, 16, 0.92);
+        --muted: rgba(23, 19, 16, 0.62);
+        --line: rgba(23, 19, 16, 0.14);
+        --glass: rgba(255, 255, 255, 0.55);
+        --glass2: rgba(255, 255, 255, 0.42);
+        --radius: 22px;
+        --radiusSm: 16px;
+        --shadow: 0 26px 70px rgba(35, 28, 20, 0.22);
+        --shadow2: 0 14px 38px rgba(35, 28, 20, 0.16);
+        --cardShadow: 0 22px 60px rgba(35, 28, 20, 0.18);
+        --cardBorder: rgba(23, 19, 16, 0.12);
+        --accent0: #d97757; /* 暖橙 */
+        --accent1: #6a9bcc; /* 清蓝 */
+        --accent2: #788c5d; /* 松绿 */
+        --chipBg: rgba(255, 255, 255, 0.62);
+        --chipBg2: rgba(255, 255, 255, 0.46);
+        --chipBorder: rgba(23, 19, 16, 0.10);
+
+        /* 照片调色变量（JS 会更新） */
+        --f-bright: 1;
+        --f-contrast: 1;
+        --f-sat: 1;
+        --f-hue: 0deg;
+        --f-sep: 0;
+        --hl: 0.08; /* 高光叠加（screen） */
+        --sh: 0.14; /* 阴影叠加（multiply） */
+        --tempWarm: 0.08;
+        --tempCool: 0;
+
+        /* iOS/iframe 下 100vh 不稳定：用 JS 写入的真实视口高度（单位=1vh） */
+        --vh: 1vh;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, "SF Pro Display", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+        color: var(--ink);
+        overflow: hidden;
+        /* 外层舞台：用于露出圆角“边缘”（参照你给的截图） */
+        background:
+          radial-gradient(1200px 800px at 25% 20%, rgba(90, 180, 255, 0.22), transparent 58%),
+          radial-gradient(1200px 800px at 75% 70%, rgba(255, 120, 180, 0.16), transparent 60%),
+          linear-gradient(135deg, #06102a, #000);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: geometricPrecision;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding:
+          max(10px, env(safe-area-inset-top, 0px))
+          max(10px, env(safe-area-inset-right, 0px))
+          max(10px, env(safe-area-inset-bottom, 0px))
+          max(10px, env(safe-area-inset-left, 0px));
+      }
+
+      /* 参照图的圆角“边缘容器” */
+      .sheet{
+        width: min(430px, 100%);
+        height: calc(var(--vh) * 100);
+        border-radius: 34px;
+        overflow: hidden;
+        position: relative;
+        background: linear-gradient(180deg, var(--paper0), var(--paper1));
+        box-shadow:
+          0 26px 90px rgba(0,0,0,.55),
+          0 10px 30px rgba(0,0,0,.35);
+        border: 1px solid rgba(255,255,255,.10);
+      }
+      /* 入场“呼之欲出” */
+      .sheet.intro-enter .card{
+        animation: cardPop 760ms cubic-bezier(.2,.92,.18,1) both;
+        will-change: transform, opacity;
+        transform-origin: 50% 55%;
+      }
+      .sheet.intro-enter .pager-dots{
+        animation: dotsUp 620ms cubic-bezier(.2,.92,.18,1) both;
+        will-change: transform, opacity;
+      }
+      .sheet.intro-enter::before{
+        animation: bgBloom 760ms cubic-bezier(.2,.92,.18,1) both;
+        will-change: transform, opacity;
+        transform-origin: 50% 30%;
+      }
+      @keyframes cardPop{
+        0%{ transform: translate3d(0,22px,0) scale(.98); opacity: 0; }
+        62%{ transform: translate3d(0,-3px,0) scale(1.015); opacity: 1; }
+        100%{ transform: translate3d(0,0,0) scale(1); opacity: 1; }
+      }
+      @keyframes dotsUp{
+        0%{ transform: translate3d(0,14px,0); opacity: 0; }
+        100%{ transform: translate3d(0,0,0); opacity: 1; }
+      }
+      @keyframes bgBloom{
+        0%{ transform: translate3d(0,0,0) scale(1.03); opacity: .55; }
+        100%{ transform: translate3d(0,0,0) scale(1.00); opacity: .92; }
+      }
+      @media (prefers-reduced-motion: reduce){
+        .sheet.intro-enter .card,
+        .sheet.intro-enter .pager-dots,
+        .sheet.intro-enter::before{ animation:none; }
+      }
+
+      /* 背景：水彩般的色块 + 轻噪点（纯 CSS / SVG dataURL，无外链） */
+      .sheet::before {
+        content: "";
+        position: absolute;
+        inset: -40px;
+        background:
+          radial-gradient(900px 600px at 30% 20%, rgba(97, 217, 224, 0.35), transparent 60%),
+          radial-gradient(980px 640px at 78% 18%, rgba(255, 165, 140, 0.38), transparent 62%),
+          radial-gradient(1100px 820px at 70% 88%, rgba(125, 185, 120, 0.28), transparent 60%),
+          radial-gradient(760px 560px at 15% 88%, rgba(105, 160, 255, 0.18), transparent 58%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.18));
+        filter: blur(6px);
+        opacity: 0.92;
+        pointer-events: none;
+        transform: translate3d(0, 0, 0);
+        animation: bgFloat 10s ease-in-out infinite alternate;
+      }
+      .sheet::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)' opacity='.11'/%3E%3C/svg%3E");
+        mix-blend-mode: multiply;
+        opacity: 0.35;
+        pointer-events: none;
+        animation: grainMove 6s linear infinite;
+      }
+
+      @keyframes bgFloat {
+        0% { transform: translate3d(-10px, -8px, 0) scale(1.02); filter: blur(6px); }
+        100% { transform: translate3d(12px, 10px, 0) scale(1.05); filter: blur(7px); }
+      }
+      @keyframes grainMove {
+        0% { transform: translate3d(0, 0, 0); }
+        100% { transform: translate3d(-26px, 18px, 0); }
+      }
+
+      /* =========================
+         两段式：横向滑动分页
+         ========================= */
+      .pager {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y; /* 让竖向滚动交给内部，横向交给 pager */
+        scrollbar-width: none;
+      }
+      .pager::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      .wrap {
+        position: relative;
+        flex: 0 0 100%;
+        height: 100%;
+        scroll-snap-align: start;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding:
+          calc(18px + env(safe-area-inset-top, 0px))
+          max(14px, env(safe-area-inset-right, 0px))
+          calc(18px + env(safe-area-inset-bottom, 0px))
+          max(14px, env(safe-area-inset-left, 0px));
+      }
+
+      .pager-dots {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 50;
+      }
+      .dots-inner {
+        pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.55);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 16px 36px rgba(35, 28, 20, 0.14);
+      }
+      .dotbtn {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 999px;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(23, 19, 16, 0.18);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+      }
+      .dotbtn.is-active .dot {
+        background: rgba(23, 19, 16, 0.62);
+      }
+      .dotlabel {
+        font-size: 12px;
+        font-weight: 1000;
+        letter-spacing: 2px;
+        color: rgba(23, 19, 16, 0.72);
+      }
+
+      .card {
+        /* 画幅更窄：更接近抖音详情页的卡片视觉 */
+        width: min(392px, 100%);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.52);
+        border: 1px solid var(--cardBorder);
+        box-shadow: var(--cardShadow);
+        overflow: hidden;
+        backdrop-filter: blur(14px);
+        max-height: calc((var(--vh) * 100) - 36px);
+        /* 让 A / B 两页卡片保持一致“可视画幅”：
+           注意 .wrap 上下有 18px padding（共 36px），所以卡片本体高度要再扣掉这部分，
+           否则会出现顶部文案被裁切（你截图里的情况）。 */
+        height: calc((var(--vh) * 100) - 72px);
+        position: relative;
+      }
+      .card::before{
+        content:"";
+        position:absolute;
+        inset:0;
+        pointer-events:none;
+        background:
+          radial-gradient(900px 260px at 14% 0%, rgba(217,119,87,.16), rgba(217,119,87,0) 62%),
+          radial-gradient(900px 260px at 86% 0%, rgba(106,155,204,.14), rgba(106,155,204,0) 62%),
+          linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,0));
+        opacity: .95;
+        mix-blend-mode: overlay;
+      }
+      .card::after{
+        content:"";
+        position:absolute;
+        inset:-1px;
+        pointer-events:none;
+        border-radius: 30px;
+        background: conic-gradient(from 210deg, rgba(217,119,87,.20), rgba(106,155,204,.12), rgba(120,140,93,.12), rgba(217,119,87,.20));
+        filter: blur(18px);
+        opacity: .35;
+      }
+
+      .card-inner {
+        padding: 18px 18px 16px 18px;
+      }
+
+      /* 小屏时允许卡片内部滚动 */
+      .card-scroll {
+        height: 100%;
+        max-height: none;
+        overflow: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .card-scroll::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      .topline {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        justify-content: center;
+        padding: 12px 10px 10px 10px;
+      }
+      .orb {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 52%),
+          conic-gradient(from 210deg, #49d2ff, #ff76c8, #ffd079, #49d2ff);
+        box-shadow: 0 10px 28px rgba(35, 28, 20, 0.12);
+      }
+      .topline .title {
+        font-weight: 900;
+        letter-spacing: 3px;
+        font-size: 18px;
+      }
+      .topline .sep {
+        width: 1px;
+        height: 18px;
+        background: rgba(23, 19, 16, 0.16);
+        transform: translateY(1px);
+      }
+      .topline .sub {
+        font-weight: 800;
+        letter-spacing: 2px;
+        color: rgba(23, 19, 16, 0.72);
+      }
+
+      .line {
+        height: 1px;
+        background: linear-gradient(90deg, rgba(23, 19, 16, 0), rgba(23, 19, 16, 0.18), rgba(23, 19, 16, 0));
+        margin: 6px 0 14px 0;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: rgba(23, 19, 16, 0.72);
+        font-weight: 900;
+        letter-spacing: 2px;
+        font-size: 13px;
+      }
+      .section-head::before,
+      .section-head::after {
+        content: "";
+        height: 1px;
+        flex: 1;
+        background: rgba(23, 19, 16, 0.14);
+        opacity: 0.7;
+      }
+      .section-head span {
+        transform: translateY(-1px);
+      }
+
+      /* A: 输入城市 */
+      .city-row {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        background: var(--chipBg);
+        border: 1px solid var(--chipBorder);
+        border-radius: 18px;
+        padding: 12px 12px;
+        box-shadow: 0 14px 34px rgba(35, 28, 20, 0.12);
+      }
+      .city-row:focus-within{
+        border-color: rgba(217,119,87,.32);
+        box-shadow:
+          0 16px 40px rgba(35, 28, 20, 0.14),
+          0 0 0 4px rgba(217,119,87,.12);
+      }
+      .city-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 60%), #e96b58;
+        box-shadow: 0 0 0 4px rgba(233, 107, 88, 0.18);
+        flex: 0 0 auto;
+      }
+      .city-input {
+        border: 0;
+        outline: none;
+        background: transparent;
+        font-size: 20px;
+        font-weight: 900;
+        letter-spacing: 1px;
+        width: 100%;
+        min-width: 0;
+        color: rgba(23, 19, 16, 0.95);
+      }
+      .city-input::placeholder {
+        color: rgba(23, 19, 16, 0.34);
+        font-weight: 800;
+      }
+      .go-btn {
+        flex: 0 0 auto;
+        height: 40px;
+        padding: 0 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(217,119,87,.22);
+        background: linear-gradient(180deg, rgba(255,255,255,.78), rgba(255,255,255,.56));
+        color: rgba(23, 19, 16, 0.92);
+        font-weight: 1000;
+        letter-spacing: 1px;
+        cursor: pointer;
+        box-shadow: 0 10px 22px rgba(35, 28, 20, 0.12);
+        transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+      }
+      .go-btn:active {
+        transform: translateY(1px) scale(0.99);
+        box-shadow: 0 8px 18px rgba(35, 28, 20, 0.10);
+      }
+
+      /* 参数卡片 */
+      .params {
+        margin-top: 12px;
+        display: grid;
+        /* 画幅变窄后，必须允许网格收缩到 0（否则会溢出导致你看到“没居中/被遮盖”） */
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .pbox {
+        min-width: 0;
+        border-radius: 14px;
+        background: var(--chipBg2);
+        border: 1px solid var(--chipBorder);
+        padding: 8px 8px 7px 8px;
+        text-align: center;
+        box-shadow: 0 10px 22px rgba(35, 28, 20, 0.10);
+      }
+      .pbox .k {
+        font-size: 11px;
+        letter-spacing: 2px;
+        color: rgba(23, 19, 16, 0.56);
+        font-size: 12px;
+      }
+      .pbox .v {
+        margin-top: 4px;
+        font-weight: 1000;
+        font-size: 20px;
+        letter-spacing: 1px;
+        color: rgba(23, 19, 16, 0.92);
+        white-space: nowrap;
+      }
+
+      .mid-hint {
+        margin: 14px 0 10px 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: rgba(23, 19, 16, 0.68);
+        font-weight: 900;
+        letter-spacing: 3px;
+      }
+      .mid-hint::before,
+      .mid-hint::after {
+        content: "";
+        height: 1px;
+        flex: 1;
+        background: rgba(23, 19, 16, 0.14);
+        opacity: 0.7;
+      }
+
+      /* B: 机位推荐 */
+      .photo-card {
+        margin-top: 12px;
+        border-radius: 18px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.20);
+        border: 1px solid rgba(23, 19, 16, 0.10);
+        box-shadow: 0 18px 44px rgba(35, 28, 20, 0.14);
+        position: relative;
+      }
+      .photo-wrap {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        background: #d9d9d9;
+      }
+      .photo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: brightness(var(--f-bright)) contrast(var(--f-contrast)) saturate(var(--f-sat)) hue-rotate(var(--f-hue))
+          sepia(var(--f-sep));
+        transform: scale(1.02);
+      }
+
+      /* 高光/阴影/色温叠加：用伪元素模拟更“摄影”的调色手感 */
+      .photo-wrap::before,
+      .photo-wrap::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      /* 色温（暖） */
+      .photo-wrap::before {
+        background: radial-gradient(1200px 540px at 55% 35%, rgba(255, 170, 90, 0.45), rgba(255, 170, 90, 0) 60%),
+          radial-gradient(900px 520px at 25% 60%, rgba(120, 235, 255, 0.38), rgba(120, 235, 255, 0) 58%);
+        mix-blend-mode: color;
+        opacity: calc(var(--tempWarm) + var(--tempCool));
+      }
+      /* 高光/阴影 */
+      .photo-wrap::after {
+        background: radial-gradient(1200px 520px at 50% 20%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 55%),
+          linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.18));
+        mix-blend-mode: screen;
+        opacity: var(--hl);
+      }
+      .shade {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(900px 520px at 50% 90%, rgba(0, 0, 0, 0.52), rgba(0, 0, 0, 0) 58%);
+        mix-blend-mode: multiply;
+        opacity: var(--sh);
+      }
+
+      .photo-meta {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        top: 12px;
+        display: flex;
+        justify-content: flex-start;
+        z-index: 3;
+        pointer-events: none;
+      }
+      .meta-pill {
+        pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 11px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.32);
+        color: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(14px);
+        font-weight: 900;
+        letter-spacing: 2px;
+        font-size: 12px;
+      }
+      .meta-pill .sp {
+        width: 1px;
+        height: 12px;
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      .caption {
+        padding: 14px 2px 4px 2px;
+      }
+      .caption .big {
+        font-size: 34px;
+        font-weight: 1000;
+        letter-spacing: 1px;
+        color: rgba(23, 19, 16, 0.92);
+      }
+      .caption .small {
+        margin-top: 6px;
+        color: rgba(23, 19, 16, 0.62);
+        font-weight: 900;
+        letter-spacing: 3px;
+        font-size: 12px;
+      }
+
+      /* 调色模块 */
+      .tone {
+        margin-top: 10px;
+        padding: 12px 12px 12px 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.52);
+        border: 1px solid rgba(23, 19, 16, 0.10);
+        box-shadow: 0 14px 34px rgba(35, 28, 20, 0.14);
+      }
+      .tone-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .tone-title {
+        font-weight: 1000;
+        letter-spacing: 2px;
+        color: rgba(23, 19, 16, 0.82);
+      }
+      .tone-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .mini {
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(23, 19, 16, 0.10);
+        background: rgba(255, 255, 255, 0.72);
+        color: rgba(23, 19, 16, 0.86);
+        font-weight: 1000;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: transform 140ms ease, box-shadow 140ms ease;
+        box-shadow: 0 10px 22px rgba(35, 28, 20, 0.10);
+      }
+      .mini:active {
+        transform: translateY(1px) scale(0.99);
+      }
+
+      .sliders {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .srow {
+        display: grid;
+        grid-template-columns: 56px 1fr 50px;
+        align-items: center;
+        gap: 10px;
+      }
+      .slabel {
+        font-weight: 900;
+        color: rgba(23, 19, 16, 0.62);
+        letter-spacing: 2px;
+        font-size: 12px;
+      }
+      .svalue {
+        font-weight: 1000;
+        color: rgba(23, 19, 16, 0.72);
+        text-align: right;
+        font-size: 12px;
+        letter-spacing: 1px;
+      }
+      .track {
+        height: 11px;
+        border-radius: 999px;
+        background: rgba(23, 19, 16, 0.08);
+        border: 1px solid rgba(23, 19, 16, 0.12);
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+      }
+      .track::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(120, 235, 255, 0.55), rgba(255, 120, 200, 0.45), rgba(255, 210, 120, 0.45));
+        opacity: 0.75;
+      }
+      .knob {
+        position: absolute;
+        top: 50%;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(23, 19, 16, 0.14);
+        box-shadow: 0 10px 22px rgba(35, 28, 20, 0.16);
+      }
+
+      .footnote {
+        margin-top: 10px;
+        font-size: 12px;
+        color: rgba(23, 19, 16, 0.52);
+        letter-spacing: 0.5px;
+        line-height: 1.4;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          scroll-behavior: auto !important;
+          transition: none !important;
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sheet" class="sheet" aria-label="抖音卡片容器">
+      <div id="pager" class="pager" aria-label="从右向左滑动切换两部分">
+        <!-- Part A：城市 → 风景照 -->
+        <section class="wrap" data-page="a" aria-label="A 部分：城市与风景照">
+        <main class="card" role="main" aria-label="抖音卡片：摄影时刻（A）">
+          <div class="card-scroll">
+            <div class="topline" aria-hidden="true">
+              <span class="orb"></span>
+              <span class="title">抖音卡片</span>
+              <span class="sep"></span>
+              <span class="sub">摄影时刻 A → B</span>
+            </div>
+            <div class="line" aria-hidden="true"></div>
+
+            <div class="card-inner">
+              <div class="section-head"><span>A · 城市 → 风景</span></div>
+
+              <div class="city-row" aria-label="输入城市">
+                <span class="city-dot" aria-hidden="true"></span>
+                <input
+                  id="cityInput"
+                  class="city-input"
+                  type="text"
+                  inputmode="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="输入城市（例如：杭州 / 成都）"
+                />
+                <button id="btnGo" class="go-btn" type="button" aria-label="生成">GO →</button>
+              </div>
+
+              <div class="params" aria-label="推荐拍摄参数">
+                <div class="pbox"><div class="k">ISO</div><div id="pIso" class="v">200</div></div>
+                <div class="pbox"><div class="k">F</div><div id="pF" class="v">2.8</div></div>
+                <div class="pbox"><div class="k">SS</div><div id="pSs" class="v">1/500</div></div>
+                <div class="pbox"><div class="k">WB</div><div id="pWb" class="v">5200</div></div>
+              </div>
+
+              <div class="mid-hint">就在附近</div>
+              <div class="section-head"><span>B · 机位推荐</span></div>
+
+              <section class="photo-card" aria-label="城市风景照（可在下一页调色）">
+                <div class="photo-wrap">
+                  <img id="photoA" class="photo" alt="城市风景照（离线生成）" />
+                  <div class="shade" aria-hidden="true"></div>
+                  <div class="photo-meta">
+                    <div class="meta-pill" aria-label="机位信息">
+                      <span id="metaDistA">1.2KM</span><span class="sp" aria-hidden="true"></span><span id="metaTimeA">08:20</span>
+                      <span class="sp" aria-hidden="true"></span><span id="metaMoodA">晨雾</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="caption">
+                <div id="spotTitleA" class="big">苏堤春晓</div>
+                <div id="spotSubA" class="small">—</div>
+              </div>
+
+              <div class="footnote" style="text-align:center;">
+                提示：从<strong>右向左</strong>滑动进入下一部分，在那里可用色调模块调节这张照片。
+              </div>
+            </div>
+          </div>
+        </main>
+        </section>
+
+        <!-- Part B：调色 → 成片 -->
+        <section class="wrap" data-page="b" aria-label="B 部分：调色模块">
+        <main class="card" role="main" aria-label="抖音卡片：摄影时刻（B）">
+          <div class="card-scroll">
+            <div class="topline" aria-hidden="true">
+              <span class="orb"></span>
+              <span class="title">抖音卡片</span>
+              <span class="sep"></span>
+              <span class="sub">调色成片 B</span>
+            </div>
+            <div class="line" aria-hidden="true"></div>
+
+            <div class="card-inner">
+              <div class="section-head"><span>B · 调色 → 成片</span></div>
+
+              <section class="photo-card" aria-label="上一部分的城市风景照（可调色）">
+                <div class="photo-wrap">
+                  <img id="photoB" class="photo" alt="城市风景照（离线生成，可调色）" />
+                  <div class="shade" aria-hidden="true"></div>
+                  <div class="photo-meta">
+                    <div class="meta-pill" aria-label="机位信息">
+                      <span id="metaDistB">—</span><span class="sp" aria-hidden="true"></span><span id="metaTimeB">—</span>
+                      <span class="sp" aria-hidden="true"></span><span id="metaMoodB">—</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="caption">
+                <div id="spotTitleB" class="big" style="font-size:34px;">—</div>
+                <div id="spotSubB" class="small">—</div>
+              </div>
+
+              <section class="tone" aria-label="色调模块（可调节）">
+                <div class="tone-head">
+                  <div class="tone-title">色调模块（可调）</div>
+                  <div class="tone-actions">
+                    <button id="btnReset" class="mini" type="button">重置推荐</button>
+                    <button id="btnRandom" class="mini" type="button">换一种推荐</button>
+                  </div>
+                </div>
+
+                <div class="sliders" id="sliders">
+                  <div class="srow" data-key="temp">
+                    <div class="slabel">色温</div>
+                    <div class="track" role="slider" aria-label="色温" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="contrast">
+                    <div class="slabel">对比</div>
+                    <div class="track" role="slider" aria-label="对比度" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="sat">
+                    <div class="slabel">饱和</div>
+                    <div class="track" role="slider" aria-label="饱和度" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="expo">
+                    <div class="slabel">曝光</div>
+                    <div class="track" role="slider" aria-label="曝光" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="hi">
+                    <div class="slabel">高光</div>
+                    <div class="track" role="slider" aria-label="高光" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="sh">
+                    <div class="slabel">阴影</div>
+                    <div class="track" role="slider" aria-label="阴影" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                  <div class="srow" data-key="hue">
+                    <div class="slabel">色调</div>
+                    <div class="track" role="slider" aria-label="色调" tabindex="0"><span class="knob"></span></div>
+                    <div class="svalue" data-value>—</div>
+                  </div>
+                </div>
+
+                <div class="footnote">
+                  说明：为保证离线可运行，本页面不会发起任何网络请求；调节滑杆会实时作用于“上一部分”的城市风景照。<br />
+                  提示：从<strong>左向右</strong>滑动可返回上一部分。
+                </div>
+              </section>
+            </div>
+          </div>
+        </main>
+        </section>
+      </div>
+
+      <nav class="pager-dots" aria-label="分页指示器">
+        <div class="dots-inner">
+          <button class="dotbtn is-active" type="button" data-dot="0" aria-label="第 1 部分：城市">
+            <span class="dot" aria-hidden="true"></span><span class="dotlabel">A</span>
+          </button>
+          <button class="dotbtn" type="button" data-dot="1" aria-label="第 2 部分：调色">
+            <span class="dot" aria-hidden="true"></span><span class="dotlabel">B</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+
+    <script>
+      (function () {
+        "use strict";
+
+        const $ = (sel) => document.querySelector(sel);
+        const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+        // iOS/iframe 下 100vh 会偏大：用真实 innerHeight 写入 CSS 变量 --vh（单位=1vh）
+        function setVhVar() {
+          try {
+            const vh = (window.innerHeight || document.documentElement.clientHeight || 0) * 0.01;
+            document.documentElement.style.setProperty("--vh", `${vh}px`);
+          } catch (_) {}
+        }
+        setVhVar();
+        window.addEventListener("resize", setVhVar, { passive: true });
+
+        // 父页面触发入场动画（呼之欲出）
+        const sheet = document.getElementById("sheet");
+        function playIntro() {
+          if (!sheet) return;
+          sheet.classList.remove("intro-enter");
+          // 强制 reflow：确保重复触发
+          void sheet.offsetWidth;
+          sheet.classList.add("intro-enter");
+          window.setTimeout(() => sheet.classList.remove("intro-enter"), 860);
+        }
+        window.addEventListener("message", (ev) => {
+          try {
+            const d = ev && ev.data;
+            if (!d || d.type !== "douyin-intro") return;
+            // mode=reset：回到 A 并重新播放
+            if (d.mode === "reset") {
+              scrollToPage(0, { instant: true });
+              const sc = document.querySelector(".wrap[data-page='a'] .card-scroll");
+              if (sc) sc.scrollTop = 0;
+              playIntro();
+            }
+          } catch (_) {}
+        });
+
+        const pager = $("#pager");
+        const dotBtns = $$("[data-dot]");
+
+        const cityInput = $("#cityInput");
+        const btnGo = $("#btnGo");
+        const btnReset = $("#btnReset");
+        const btnRandom = $("#btnRandom");
+
+        const photoA = $("#photoA");
+        const photoB = $("#photoB");
+
+        const pIso = $("#pIso");
+        const pF = $("#pF");
+        const pSs = $("#pSs");
+        const pWb = $("#pWb");
+        const metaDistA = $("#metaDistA");
+        const metaTimeA = $("#metaTimeA");
+        const metaMoodA = $("#metaMoodA");
+        const spotTitleA = $("#spotTitleA");
+        const spotSubA = $("#spotSubA");
+
+        const metaDistB = $("#metaDistB");
+        const metaTimeB = $("#metaTimeB");
+        const metaMoodB = $("#metaMoodB");
+        const spotTitleB = $("#spotTitleB");
+        const spotSubB = $("#spotSubB");
+
+        const sliders = $("#sliders");
+
+        // ----------------------------
+        // 解决「进入卡片后外层无法上拉/下拽」：
+        // iOS/部分 WebView 中 iframe 会吞掉竖向手势，导致外层推荐流无法上下刷。
+        // 在此识别“快速纵向滑动”，通过 postMessage 通知父页面滚动到上一条/下一条。
+        // ----------------------------
+        function bindOuterSwipeBridge() {
+          if (!window.parent || window.parent === window) return;
+          let sx = 0;
+          let sy = 0;
+          let st = 0;
+          let startedInScroll = null;
+
+          function getScrollEl(t) {
+            return t && t.closest ? t.closest(".card-scroll") : null;
+          }
+
+          document.addEventListener(
+            "touchstart",
+            (e) => {
+              const t = e.touches && e.touches[0];
+              if (!t) return;
+              sx = t.clientX;
+              sy = t.clientY;
+              st = Date.now();
+              startedInScroll = getScrollEl(e.target);
+            },
+            { passive: true }
+          );
+
+          document.addEventListener(
+            "touchend",
+            (e) => {
+              const t = e.changedTouches && e.changedTouches[0];
+              if (!t) return;
+              const dx = t.clientX - sx;
+              const dy = t.clientY - sy;
+              const dt = Date.now() - st;
+
+              // 判定为“快滑”：更像抖音的上拉/下拽（避免与正常滚动冲突）
+              if (dt > 520) return;
+              if (Math.abs(dy) < 90) return;
+              if (Math.abs(dy) <= Math.abs(dx) * 1.2) return;
+
+              // 如果起点在可滚动区域，只有在滚动到边界才触发外层翻页
+              if (startedInScroll) {
+                const el = startedInScroll;
+                const atTop = el.scrollTop <= 1;
+                const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+                if (!((dy > 0 && atTop) || (dy < 0 && atBottom))) return;
+              }
+
+              try {
+                window.parent.postMessage({ type: "feed-swipe", dir: dy < 0 ? "up" : "down" }, "*");
+              } catch (_) {}
+            },
+            { passive: true }
+          );
+        }
+        bindOuterSwipeBridge();
+
+        // ----------------------------
+        // 纯前端：确定性随机（同城市 → 同风格；“换一种推荐” → 换 seed）
+        // ----------------------------
+        function hash32(str) {
+          let h = 2166136261 >>> 0;
+          for (let i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+          }
+          return h >>> 0;
+        }
+        function mulberry32(seed) {
+          return function () {
+            seed |= 0;
+            seed = (seed + 0x6d2b79f5) | 0;
+            let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+            t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+        function clamp(n, a, b) {
+          return Math.max(a, Math.min(b, n));
+        }
+        function pick(rand, arr) {
+          return arr[Math.floor(rand() * arr.length)];
+        }
+
+        function fmtShutter(rand) {
+          const pool = ["1/80", "1/125", "1/200", "1/320", "1/500", "1/640", "1/1000"];
+          return pool[Math.floor(rand() * pool.length)];
+        }
+        function fmtF(rand) {
+          const pool = ["1.8", "2.0", "2.8", "3.2", "4.0"];
+          return pool[Math.floor(rand() * pool.length)];
+        }
+        function fmtIso(rand) {
+          const pool = ["100", "160", "200", "320", "400", "640"];
+          return pool[Math.floor(rand() * pool.length)];
+        }
+        function fmtWb(rand) {
+          // 偏暖/偏冷两端更“摄影”
+          const base = 4200 + Math.round(rand() * 2400);
+          return String(base);
+        }
+
+        // ----------------------------
+        // 城市 → 风景与文案
+        // ----------------------------
+        const SPOTS = [
+          "苏堤春晓",
+          "海风栈道",
+          "云海观景台",
+          "古桥暮色",
+          "山城天台",
+          "湖畔薄雾",
+          "松林晨光",
+          "街角霓虹",
+          "峡谷回声",
+          "风起沙丘",
+          "海边灯塔",
+          "玻璃海湾",
+          "雨后青石",
+          "晚霞长堤",
+        ];
+        const MOODS = ["晨雾", "微风", "薄暮", "晴空", "夜色", "阴天", "晚霞", "雨后"];
+
+        function cityToSubtitle(city, spot) {
+          const c = city || "未知城市";
+          return `${c} · ${spot}`;
+        }
+
+        function makeMeta(rand) {
+          const dist = (0.6 + rand() * 3.2).toFixed(1);
+          const hh = Math.floor(6 + rand() * 14);
+          const mm = Math.floor(rand() * 60);
+          const time = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+          const mood = pick(rand, MOODS);
+          return { dist: `${dist}KM`, time, mood };
+        }
+
+        // ----------------------------
+        // 生成“独特风景照”：SVG 画面（带颗粒、雾气、远景层次）
+        // ----------------------------
+        function svgScenery(city, seedSalt) {
+          const seed = hash32(`${city}__${seedSalt}`);
+          const rand = mulberry32(seed);
+
+          // 调色板
+          const palettes = [
+            { sky0: "#b7d7ff", sky1: "#ffe4c6", hill0: "#2b3e4e", hill1: "#3b5a4a", water0: "#2d5a70", water1: "#1e2f3c" },
+            { sky0: "#c9f3ff", sky1: "#ffd7e9", hill0: "#26314b", hill1: "#2c5a5a", water0: "#2a6d78", water1: "#173041" },
+            { sky0: "#ffe7b8", sky1: "#c8eaff", hill0: "#3f2f2b", hill1: "#2e4a3b", water0: "#3b6e8a", water1: "#1a2a38" },
+          ];
+          const p = pick(rand, palettes);
+          const fog = 0.2 + rand() * 0.35;
+          const sunX = 20 + rand() * 60;
+          const sunY = 10 + rand() * 22;
+
+          // 城市剪影（可有可无）
+          const showCity = rand() > 0.42;
+          const skyline = [];
+          if (showCity) {
+            const n = 10 + Math.floor(rand() * 10);
+            let x = 0;
+            for (let i = 0; i < n; i++) {
+              const w = 18 + rand() * 30;
+              const h = 22 + rand() * 52;
+              skyline.push({ x, w, h });
+              x += w * (0.75 + rand() * 0.25);
+            }
+          }
+
+          const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${p.sky0}"/>
+      <stop offset="1" stop-color="${p.sky1}"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${p.water0}"/>
+      <stop offset="1" stop-color="${p.water1}"/>
+    </linearGradient>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch" />
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 .14 0"/>
+    </filter>
+    <filter id="soft">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <radialGradient id="sun" cx="${sunX}%" cy="${sunY}%" r="55%">
+      <stop offset="0" stop-color="rgba(255,255,255,.95)"/>
+      <stop offset=".28" stop-color="rgba(255,255,255,.55)"/>
+      <stop offset="1" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#sun)" opacity=".65"/>
+
+  <!-- 远山 -->
+  <path d="M0,560 C240,470 420,520 620,460 C860,390 980,470 1200,440 C1380,420 1480,460 1600,430 L1600,900 L0,900 Z"
+        fill="${p.hill0}" opacity=".72"/>
+  <path d="M0,610 C260,520 480,590 700,530 C960,460 1060,540 1280,520 C1450,510 1520,540 1600,520 L1600,900 L0,900 Z"
+        fill="${p.hill1}" opacity=".55"/>
+
+  <!-- 水面 -->
+  <rect x="0" y="520" width="1600" height="420" fill="url(#water)" opacity=".82"/>
+  <path d="M0,610 C220,592 420,640 650,618 C900,594 1100,648 1320,628 C1480,614 1540,640 1600,622"
+        fill="none" stroke="rgba(255,255,255,.26)" stroke-width="5" opacity=".55"/>
+  <path d="M0,690 C240,666 470,710 710,684 C970,656 1140,716 1340,694 C1510,674 1560,708 1600,690"
+        fill="none" stroke="rgba(255,255,255,.18)" stroke-width="4" opacity=".45"/>
+
+  ${showCity ? `
+  <g transform="translate(140,468)" opacity=".46">
+    ${skyline
+      .map((b) => `<rect x="${b.x.toFixed(1)}" y="${(80 - b.h).toFixed(1)}" width="${b.w.toFixed(1)}" height="${b.h.toFixed(1)}" rx="2" fill="rgba(15,18,26,.95)"/>`)
+      .join("")}
+  </g>` : ""}
+
+  <!-- 雾气层 -->
+  <g filter="url(#soft)" opacity="${fog.toFixed(3)}">
+    <ellipse cx="420" cy="560" rx="520" ry="140" fill="rgba(255,255,255,.80)"/>
+    <ellipse cx="1120" cy="560" rx="620" ry="160" fill="rgba(255,255,255,.72)"/>
+  </g>
+
+  <!-- 颗粒 -->
+  <rect width="1600" height="900" filter="url(#grain)" opacity=".9"/>
+
+  <!-- 暗角 -->
+  <rect width="1600" height="900" fill="rgba(0,0,0,.18)"/>
+  <rect width="1600" height="900" fill="rgba(0,0,0,0)"/>
+  <radialGradient id="v" cx="50%" cy="40%" r="70%">
+    <stop offset="0" stop-color="rgba(0,0,0,0)"/>
+    <stop offset="1" stop-color="rgba(0,0,0,.34)"/>
+  </radialGradient>
+  <rect width="1600" height="900" fill="url(#v)" opacity=".68"/>
+</svg>`;
+
+          return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg.trim());
+        }
+
+        // ----------------------------
+        // 调色：值域 & 映射
+        // ----------------------------
+        const state = {
+          city: "杭州",
+          seedSalt: 0,
+          sliders01: {
+            temp: 0.62, // 0..1
+            contrast: 0.56,
+            sat: 0.62,
+            expo: 0.52,
+            hi: 0.40,
+            sh: 0.54,
+            hue: 0.50,
+          },
+          recommended01: null,
+        };
+
+        function sliderToCssVars(s) {
+          // temp: 0..1 -> -1..1
+          const t = (s.temp - 0.5) * 2;
+          const warm = clamp(t, 0, 1);
+          const cool = clamp(-t, 0, 1);
+
+          const contrast = 0.68 + s.contrast * 1.0; // 0.68..1.68
+          const sat = 0.35 + s.sat * 1.95; // 0.35..2.30
+          const bright = 0.70 + s.expo * 0.95; // 0.70..1.65
+          const hue = (s.hue - 0.5) * 52; // -26..26 deg
+
+          const hl = 0.02 + s.hi * 0.32;
+          const sh = 0.06 + s.sh * 0.40;
+
+          // sepia 小幅度增强“胶片感”
+          const sep = 0.04 + (0.22 * warm + 0.06 * cool);
+
+          return {
+            "--f-contrast": contrast.toFixed(3),
+            "--f-sat": sat.toFixed(3),
+            "--f-bright": bright.toFixed(3),
+            "--f-hue": `${hue.toFixed(1)}deg`,
+            "--f-sep": sep.toFixed(3),
+            "--hl": hl.toFixed(3),
+            "--sh": sh.toFixed(3),
+            "--tempWarm": (0.02 + warm * 0.20).toFixed(3),
+            "--tempCool": (0.02 + cool * 0.20).toFixed(3),
+          };
+        }
+
+        function applyTone() {
+          const vars = sliderToCssVars(state.sliders01);
+          Object.keys(vars).forEach((k) => document.documentElement.style.setProperty(k, vars[k]));
+          updateKnobs();
+        }
+
+        function updateKnobs() {
+          const rows = Array.from(sliders.querySelectorAll(".srow"));
+          rows.forEach((row) => {
+            const key = row.getAttribute("data-key");
+            const v01 = state.sliders01[key];
+            const knob = row.querySelector(".knob");
+            const valEl = row.querySelector("[data-value]");
+            if (!knob || v01 == null) return;
+            knob.style.left = `${(v01 * 100).toFixed(2)}%`;
+
+            if (valEl) {
+              if (key === "temp") valEl.textContent = ((v01 - 0.5) * 200).toFixed(0);
+              if (key === "contrast") valEl.textContent = (0.68 + v01 * 1.0).toFixed(2);
+              if (key === "sat") valEl.textContent = (0.35 + v01 * 1.95).toFixed(2);
+              if (key === "expo") valEl.textContent = (0.70 + v01 * 0.95).toFixed(2);
+              if (key === "hi") valEl.textContent = (0.02 + v01 * 0.32).toFixed(2);
+              if (key === "sh") valEl.textContent = (0.06 + v01 * 0.40).toFixed(2);
+              if (key === "hue") valEl.textContent = ((v01 - 0.5) * 52).toFixed(0);
+            }
+          });
+        }
+
+        function makeRecommended(city, seedSalt) {
+          const rand = mulberry32(hash32(`${city}__rec__${seedSalt}`));
+          return {
+            temp: clamp(0.42 + rand() * 0.44, 0, 1),
+            contrast: clamp(0.42 + rand() * 0.32, 0, 1),
+            sat: clamp(0.48 + rand() * 0.34, 0, 1),
+            expo: clamp(0.44 + rand() * 0.28, 0, 1),
+            hi: clamp(0.30 + rand() * 0.35, 0, 1),
+            sh: clamp(0.40 + rand() * 0.35, 0, 1),
+            hue: clamp(0.46 + rand() * 0.18, 0, 1),
+          };
+        }
+
+        function setCity(city) {
+          state.city = city || "杭州";
+          const rand = mulberry32(hash32(`${state.city}__ui__${state.seedSalt}`));
+          const spot = pick(rand, SPOTS);
+          const meta = makeMeta(rand);
+
+          // 参数
+          pIso.textContent = fmtIso(rand);
+          pF.textContent = fmtF(rand);
+          pSs.textContent = fmtShutter(rand);
+          pWb.textContent = fmtWb(rand);
+
+          // 文案
+          if (metaDistA) metaDistA.textContent = meta.dist;
+          if (metaTimeA) metaTimeA.textContent = meta.time;
+          if (metaMoodA) metaMoodA.textContent = meta.mood;
+          if (spotTitleA) spotTitleA.textContent = spot;
+          if (spotSubA) spotSubA.textContent = cityToSubtitle(state.city, spot);
+
+          if (metaDistB) metaDistB.textContent = meta.dist;
+          if (metaTimeB) metaTimeB.textContent = meta.time;
+          if (metaMoodB) metaMoodB.textContent = meta.mood;
+          if (spotTitleB) spotTitleB.textContent = spot;
+          if (spotSubB) spotSubB.textContent = cityToSubtitle(state.city, spot);
+
+          // 风景照
+          const url = svgScenery(state.city, state.seedSalt);
+          if (photoA) photoA.src = url;
+          if (photoB) photoB.src = url;
+
+          // 推荐调色
+          state.recommended01 = makeRecommended(state.city, state.seedSalt);
+          state.sliders01 = { ...state.recommended01 };
+          applyTone();
+        }
+
+        // ----------------------------
+        // 滑杆交互（点击/拖动/键盘）
+        // ----------------------------
+        function setSlider01(key, v01) {
+          state.sliders01[key] = clamp(v01, 0, 1);
+          applyTone();
+        }
+
+        function pointerTo01(trackEl, clientX) {
+          const rect = trackEl.getBoundingClientRect();
+          const x = clamp(clientX - rect.left, 0, rect.width);
+          return rect.width <= 0 ? 0 : x / rect.width;
+        }
+
+        function bindSliders() {
+          const rows = Array.from(sliders.querySelectorAll(".srow"));
+          rows.forEach((row) => {
+            const key = row.getAttribute("data-key");
+            const track = row.querySelector(".track");
+            if (!key || !track) return;
+
+            track.addEventListener("pointerdown", (e) => {
+              if (e.isPrimary === false) return;
+              track.setPointerCapture(e.pointerId);
+              setSlider01(key, pointerTo01(track, e.clientX));
+            });
+            track.addEventListener("pointermove", (e) => {
+              if (e.buttons !== 1 && e.pointerType !== "touch") return;
+              setSlider01(key, pointerTo01(track, e.clientX));
+            });
+
+            // 键盘：左右微调
+            track.addEventListener("keydown", (e) => {
+              const step = 0.02;
+              if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                setSlider01(key, (state.sliders01[key] ?? 0.5) - step);
+              } else if (e.key === "ArrowRight") {
+                e.preventDefault();
+                setSlider01(key, (state.sliders01[key] ?? 0.5) + step);
+              }
+            });
+          });
+        }
+
+        // ----------------------------
+        // 横向分页（A ↔ B）：触屏滑动 + 鼠标拖拽 + 指示器点击
+        // ----------------------------
+        function pageWidth() {
+          return Math.max(1, pager ? pager.clientWidth : window.innerWidth || 1);
+        }
+
+        function currentPageIndex() {
+          if (!pager) return 0;
+          return Math.round(pager.scrollLeft / pageWidth());
+        }
+
+        function setActiveDot(idx) {
+          dotBtns.forEach((b) => b.classList.toggle("is-active", Number(b.dataset.dot) === idx));
+        }
+
+        function scrollToPage(idx) {
+          if (!pager) return;
+          const to = clamp(idx, 0, 1) * pageWidth();
+          pager.scrollTo({ left: to, behavior: "smooth" });
+        }
+
+        function bindPager() {
+          if (!pager) return;
+
+          // dots click
+          dotBtns.forEach((b) => {
+            b.addEventListener("click", () => scrollToPage(Number(b.dataset.dot) || 0));
+          });
+
+          // update dots on scroll
+          let raf = 0;
+          pager.addEventListener("scroll", () => {
+            window.cancelAnimationFrame(raf);
+            raf = window.requestAnimationFrame(() => setActiveDot(currentPageIndex()));
+          });
+
+          // mouse drag to scroll (avoid hijacking slider / input)
+          let dragging = false;
+          let startX = 0;
+          let startLeft = 0;
+
+          pager.addEventListener("pointerdown", (e) => {
+            if (e.isPrimary === false) return;
+            if (e.target && e.target.closest && e.target.closest("input,button,.track")) return;
+            dragging = true;
+            startX = e.clientX;
+            startLeft = pager.scrollLeft;
+            try {
+              pager.setPointerCapture(e.pointerId);
+            } catch (_) {}
+          });
+
+          pager.addEventListener("pointermove", (e) => {
+            if (!dragging) return;
+            const dx = e.clientX - startX;
+            pager.scrollLeft = startLeft - dx;
+          });
+
+          function stopDrag() {
+            dragging = false;
+          }
+          pager.addEventListener("pointerup", stopDrag);
+          pager.addEventListener("pointercancel", stopDrag);
+
+          // keyboard helper (desktop)
+          window.addEventListener("keydown", (e) => {
+            const ae = document.activeElement;
+            if (ae && ae.closest && ae.closest("input,.track")) return;
+            if (e.key === "ArrowLeft") scrollToPage(currentPageIndex() - 1);
+            if (e.key === "ArrowRight") scrollToPage(currentPageIndex() + 1);
+          });
+
+          // first paint
+          setActiveDot(0);
+        }
+
+        // 父页面控制 A/B 翻页（用于解决 iframe 吞掉竖向上下刷的问题）：
+        // 父页面在手势层识别横滑后，通过 postMessage 通知这里切页。
+        window.addEventListener("message", (ev) => {
+          try {
+            const d = ev && ev.data;
+            if (!d || d.type !== "douyin-page") return;
+            const idx = currentPageIndex();
+            if (typeof d.index === "number") {
+              scrollToPage(d.index, { instant: true });
+              return;
+            }
+            if (typeof d.delta === "number") {
+              scrollToPage(idx + d.delta, { instant: true });
+              return;
+            }
+          } catch (_) {}
+        });
+
+        // hash 兜底：父页面可通过设置 location.hash 切页（#a / #b）
+        function applyHashPage() {
+          const h = (location.hash || "").toLowerCase();
+          if (h === "#a") scrollToPage(0, { instant: true });
+          if (h === "#b") scrollToPage(1, { instant: true });
+        }
+        window.addEventListener("hashchange", applyHashPage);
+        applyHashPage();
+
+        function bind() {
+          btnGo.addEventListener("click", () => {
+            const city = (cityInput.value || "").trim();
+            setCity(city || state.city);
+          });
+          cityInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") btnGo.click();
+          });
+
+          btnReset.addEventListener("click", () => {
+            if (!state.recommended01) return;
+            state.sliders01 = { ...state.recommended01 };
+            applyTone();
+          });
+          btnRandom.addEventListener("click", () => {
+            state.seedSalt = (state.seedSalt + 1) % 9999;
+            setCity((cityInput.value || state.city).trim());
+          });
+        }
+
+        function init() {
+          bind();
+          bindSliders();
+          bindPager();
+          cityInput.value = state.city;
+          setCity(state.city);
+        }
+
+        // 全局兜底：避免白屏
+        try {
+          init();
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error(error);
+          const fallback = document.createElement("div");
+          fallback.style.cssText =
+            "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f6f0e6;color:#171310;font-size:16px;padding:24px;text-align:center;z-index:9999;";
+          fallback.textContent = "哎呀，页面出错了，请刷新重试。";
+          document.body.innerHTML = "";
+          document.body.appendChild(fallback);
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,2481 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <title>同款打卡地热度地图</title>
+    <style>
+      /* =========================================================
+         零依赖离线 H5：Tailwind 风格的最小子集（仅覆盖本作品用到的类）
+         注意：这不是完整 Tailwind，仅为演示交互与布局而实现的 utility 集合
+      ========================================================= */
+      :root{
+        --bg:#0B0E14;
+        --panel:#0F1320;
+        --card:#131A2A;
+        --muted:rgba(255,255,255,.68);
+        --muted2:rgba(255,255,255,.52);
+        --line:rgba(255,255,255,.10);
+        --shadow: 0 16px 40px rgba(0,0,0,.45);
+        --shadow-soft: 0 10px 24px rgba(0,0,0,.36);
+        --accent:#FF375F;
+        --pill: rgba(0,0,0,.42);
+        --white: #fff;
+        --grid: rgba(255,255,255,.06);
+        /* 商业化标题色系（更“品牌”） */
+        --title-grad: linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,.92) 40%, rgba(255,255,255,.78) 100%);
+        --sub-ink: rgba(255,255,255,.68);
+        --sub-grad: linear-gradient(90deg, rgba(255,255,255,.78) 0%, rgba(255,255,255,.58) 55%, rgba(255,255,255,.34) 100%);
+      }
+      *{box-sizing:border-box}
+      html,body{height:100%}
+      body{
+        margin:0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "PingFang SC", "Noto Sans CJK SC", "Microsoft Yahei", Arial, sans-serif;
+        background: var(--bg); /* 避免在地图拖动时出现紫色底色“漏出”的错觉 */
+        color:#fff;
+        overflow:hidden; /* 作品为竖屏弹层/全屏容器，不允许 body 滚动 */
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        overscroll-behavior: none;
+      }
+
+      /* 容器与布局 */
+      .h-screen{height:100vh}
+      .w-full{width:100%}
+      .max-w-\[430px\]{max-width:430px}
+      .mx-auto{margin-left:auto;margin-right:auto}
+      .relative{position:relative}
+      .absolute{position:absolute}
+      .fixed{position:fixed}
+      .inset-0{inset:0}
+      .top-0{top:0}
+      .left-0{left:0}
+      .right-0{right:0}
+      .bottom-0{bottom:0}
+      .z-10{z-index:10}
+      .z-20{z-index:20}
+      .z-30{z-index:30}
+      .z-40{z-index:40}
+      .z-50{z-index:50}
+
+      .flex{display:flex}
+      .items-center{align-items:center}
+      .justify-between{justify-content:space-between}
+      .justify-center{justify-content:center}
+      .gap-2{gap:8px}
+      .gap-3{gap:12px}
+      .gap-4{gap:16px}
+
+      .px-4{padding-left:16px;padding-right:16px}
+      .pt-4{padding-top:16px}
+      .pb-4{padding-bottom:16px}
+      .py-3{padding-top:12px;padding-bottom:12px}
+      .py-4{padding-top:16px;padding-bottom:16px}
+      .p-3{padding:12px}
+      .p-4{padding:16px}
+
+      .text-xs{font-size:12px}
+      .text-sm{font-size:14px}
+      .text-base{font-size:16px}
+      .font-semibold{font-weight:600}
+      .font-bold{font-weight:700}
+      .tracking-tight{letter-spacing:-.02em}
+      .leading-tight{line-height:1.15}
+      .opacity-80{opacity:.8}
+
+      .rounded-xl{border-radius:16px}
+      .rounded-2xl{border-radius:22px}
+      .rounded-full{border-radius:9999px}
+      .overflow-hidden{overflow:hidden}
+      .border{border:1px solid var(--line)}
+      .shadow-xl{box-shadow:var(--shadow)}
+      .shadow-lg{box-shadow:var(--shadow-soft)}
+
+      .select-none{user-select:none}
+
+      /* 顶部标题条 */
+      .topbar{
+        height:56px;
+        padding: 0 16px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        background: linear-gradient(to bottom, rgba(11,14,20,.92), rgba(11,14,20,.55), rgba(11,14,20,0));
+        position:absolute;
+        top:0;left:0;right:0;
+        z-index:50;
+        pointer-events:none; /* 防止误触影响地图 */
+      }
+      .topbar .chip{
+        pointer-events:auto;
+        display:flex;align-items:center;gap:8px;
+        padding:8px 10px;
+        border-radius:999px;
+        background:rgba(255,255,255,.06);
+        border:1px solid rgba(255,255,255,.10);
+        backdrop-filter: blur(10px);
+      }
+      .dot{width:8px;height:8px;border-radius:999px;background:var(--accent);box-shadow:0 0 0 4px rgba(255,55,95,.16)}
+
+      /* 标题/副标题“更商业化”：渐变字 + 轻微描边投影 */
+      .title{
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        background: var(--title-grad);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-shadow:
+          0 16px 40px rgba(0,0,0,.55),
+          0 2px 0 rgba(0,0,0,.18);
+      }
+      .subtitle{
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        background: var(--sub-grad);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-shadow: 0 14px 32px rgba(0,0,0,.45);
+      }
+
+      /* 地图区域 */
+      .map-wrap{
+        position:absolute;
+        inset:0;
+        height:100%;
+        overflow:hidden;
+        background: #0c111c; /* 避免露出页面紫色背景 */
+      }
+      .map-bg{
+        position:absolute;inset:0;
+        background: transparent; /* 去掉紫色/粉色氛围光 */
+      }
+      .focus-glow{
+        position:absolute;
+        inset:0;
+        z-index:1;
+        pointer-events:none;
+        opacity:0;
+        transition: opacity 260ms ease;
+        background:
+          radial-gradient(680px 460px at 50% 40%, rgba(var(--focus-rgb, 77,181,255), .30), transparent 62%),
+          radial-gradient(980px 520px at 72% 60%, rgba(var(--focus-rgb, 77,181,255), .14), transparent 62%);
+      }
+      .focus-glow.show{opacity:1}
+      .park-layer{
+        position:absolute;
+        inset:0; /* 地图延伸到整个上半屏，不再只在底部一块 */
+        opacity:1;
+        transform: translateZ(0);
+        filter: saturate(1.06) contrast(1.02);
+        pointer-events:none;
+        z-index:0;
+      }
+      .park-layer::after{
+        content:"";
+        position:absolute;inset:0;
+        background: radial-gradient(900px 360px at 50% 0%, rgba(0,0,0,.10), transparent 62%),
+                    linear-gradient(to top, rgba(0,0,0,.26), rgba(0,0,0,.00) 62%);
+        pointer-events:none;
+      }
+      .map-grid{
+        position:absolute;inset:0;
+        background:
+          repeating-linear-gradient(0deg, var(--grid), var(--grid) 1px, transparent 1px, transparent 22px),
+          repeating-linear-gradient(90deg, var(--grid), var(--grid) 1px, transparent 1px, transparent 22px);
+        opacity:.28; /* 降低存在感，避免“遮挡路线” */
+        mix-blend-mode: screen;
+      }
+      .map-camera{
+        position:absolute;
+        /* 世界层比视口更大：拖拽/自动居中时不会露出底色 */
+        left:-30%;
+        top:-30%;
+        width:160%;
+        height:160%;
+        background: #0c111c; /* 如果出现任何绘制空洞，也只会露出深色而不是页面紫色 */
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+      .markers-layer{
+        position:absolute;
+        inset:0;
+        z-index:2;
+      }
+
+      /* Marker */
+      .marker{
+        position:absolute;
+        transform: translate(-50%, -50%);
+        touch-action: manipulation;
+      }
+      .marker button{
+        all:unset;
+        display:block;
+        cursor:pointer;
+        border-radius:999px;
+        transform: translateZ(0);
+        position:relative;
+      }
+      .marker .bubble-wrap{
+        position:absolute;
+        left:0;
+        top:0;
+        will-change: transform;
+      }
+      .anchor-dot{
+        position:absolute;
+        left:50%;
+        top:50%;
+        width:10px;
+        height:10px;
+        border-radius:999px;
+        transform: translate(-50%, -50%);
+        background: rgba(255,255,255,.18);
+        box-shadow: 0 10px 24px rgba(0,0,0,.35);
+        border: 1px solid rgba(255,255,255,.16);
+        pointer-events:none;
+        z-index:1;
+      }
+      .anchor-line{
+        position:absolute;
+        left:50%;
+        top:50%;
+        height:2px;
+        transform-origin: 0 50%;
+        border-radius:999px;
+        background: linear-gradient(to right, rgba(255,255,255,.22), rgba(255,255,255,0));
+        pointer-events:none;
+        z-index:1;
+        opacity:0;
+      }
+
+      /* 新解锁 marker 的入场动画（缓加载感） */
+      @keyframes markerIn {
+        0%{opacity:0; transform: translate3d(0, 28px, 0) scale(.78) rotate(-4deg); filter: saturate(.92) contrast(.96)}
+        45%{opacity:1; transform: translate3d(0, -10px, 0) scale(1.10) rotate(2deg); filter: saturate(1.08) contrast(1.02)}
+        72%{opacity:1; transform: translate3d(0, 2px, 0) scale(.98) rotate(-1deg)}
+        100%{opacity:1; transform: translate3d(0, 0, 0) scale(1) rotate(0deg)}
+      }
+      .marker.appear .bubble{
+        animation: markerIn 560ms cubic-bezier(.2,.9,.2,1);
+        animation-delay: var(--d, 0ms);
+        animation-fill-mode: both;
+      }
+      .marker.appear .anchor-dot{
+        animation: markerIn 520ms cubic-bezier(.2,.9,.2,1);
+        animation-delay: var(--d, 0ms);
+        animation-fill-mode: both;
+      }
+
+      /* 轻微“呼吸”避免静态枯燥（幅度很小，不干扰点击） */
+      @keyframes bubbleBreath {
+        0%{ transform: translateZ(0) scale(1); }
+        50%{ transform: translateZ(0) scale(1.02); }
+        100%{ transform: translateZ(0) scale(1); }
+      }
+      .marker .bubble{
+        animation: bubbleBreath 4.4s ease-in-out infinite;
+      }
+      .marker .bubble{
+        position:relative;
+        border-radius:999px;
+        box-shadow:
+          0 18px 55px rgba(0,0,0,.55),
+          0 10px 26px rgba(0,0,0,.40),
+          0 0 0 1px rgba(255,255,255,.05) inset;
+      }
+      .marker .ring{
+        position:absolute;inset:-4px;
+        border-radius:999px;
+        border:4px solid rgba(255,255,255,.96);
+        box-shadow: 0 14px 30px rgba(0,0,0,.35);
+        pointer-events:none;
+      }
+      .marker .cover{
+        display:block;
+        border-radius:999px;
+        overflow:hidden;
+        background:#111;
+      }
+      .marker .badge{
+        position:absolute;
+        right:-6px;
+        bottom:-8px;
+        display:flex;
+        align-items:center;
+        gap:6px;
+        padding:6px 10px;
+        border-radius:999px;
+        background: var(--pill);
+        border:1px solid rgba(255,255,255,.12);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 12px 26px rgba(0,0,0,.45);
+        font-size:12px;
+        line-height:1;
+        pointer-events:none;
+      }
+      .heart{
+        width:14px;height:14px;
+        display:inline-block;
+      }
+      .heart svg{display:block}
+      .badge .count{font-weight:700;color:rgba(255,255,255,.94)}
+      .badge .heartFill{fill:var(--accent)}
+
+      .marker.selected .ring{border-color: rgba(255,255,255,1)}
+      .marker.selected .badge{background: rgba(0,0,0,.52)}
+
+      @keyframes popSpring {
+        0%{transform: translateZ(0) scale(1)}
+        35%{transform: translateZ(0) scale(1.08)}
+        75%{transform: translateZ(0) scale(.98)}
+        100%{transform: translateZ(0) scale(1)}
+      }
+      .pop{animation: popSpring 520ms cubic-bezier(.2,.9,.2,1)}
+
+      /* 当前位置标记（圆点） */
+      .me{
+        position:absolute;
+        transform: translate(-50%, -50%);
+        width:18px;height:18px;
+        border-radius:999px;
+        background: #4DB5FF;
+        box-shadow: 0 0 0 4px rgba(77,181,255,.18), 0 12px 26px rgba(0,0,0,.45);
+        border:2px solid rgba(255,255,255,.92);
+        z-index:999;
+      }
+      .me::before{
+        content:"";
+        position:absolute;
+        inset:-10px;
+        border-radius:999px;
+        background: radial-gradient(circle, rgba(77,181,255,.32), rgba(77,181,255,0) 62%);
+        animation: mePulse 1400ms ease-out infinite;
+      }
+      .me::after{
+        content:"我在这里";
+        position:absolute;
+        left:50%;
+        top:-10px;
+        transform: translate(-50%, -100%);
+        padding:6px 10px;
+        border-radius:999px;
+        background: rgba(0,0,0,.44);
+        border:1px solid rgba(255,255,255,.10);
+        color: rgba(255,255,255,.92);
+        font-size:12px;
+        font-weight:750;
+        letter-spacing:-.01em;
+        white-space:nowrap;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 14px 30px rgba(0,0,0,.38);
+      }
+      @keyframes mePulse{
+        0%{transform: scale(.68); opacity:.70}
+        70%{transform: scale(1.25); opacity:.00}
+        100%{transform: scale(1.25); opacity:0}
+      }
+
+      /* 底部抽屉面板 */
+      .panel{
+        position:absolute;
+        left:0;right:0;bottom:0;
+        height:60vh;
+        min-height:340px;
+        border-top-left-radius:22px;
+        border-top-right-radius:22px;
+        background: linear-gradient(180deg, rgba(19,26,42,.96), rgba(15,19,32,.96));
+        border-top:1px solid rgba(255,255,255,.10);
+        box-shadow: 0 -18px 50px rgba(0,0,0,.55);
+        overflow:hidden;
+        will-change: transform;
+      }
+
+      .panel::before{
+        content:"";
+        position:absolute;inset:0;
+        background:
+          radial-gradient(700px 300px at 30% 0%, rgba(255,55,95,.14), transparent 65%),
+          radial-gradient(650px 300px at 80% 10%, rgba(119,92,255,.12), transparent 65%);
+        opacity:.9;
+        pointer-events:none;
+      }
+      .panel-inner{
+        position:relative;
+        height:100%;
+        display:flex;
+        flex-direction:column;
+      }
+      .handle{
+        height:34px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        touch-action:none;
+      }
+      .handle .bar{
+        width:46px;height:5px;border-radius:999px;
+        background: rgba(255,255,255,.22);
+      }
+      .panel-head{
+        padding: 0 16px 10px 16px;
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:12px;
+      }
+      .sub{
+        color:var(--sub-ink);
+        font-size:12px;
+        margin-top:7px;
+        letter-spacing:-0.01em;
+      }
+      .pill{
+        display:flex;align-items:center;gap:8px;
+        padding:8px 10px;
+        border-radius:999px;
+        background: rgba(255,255,255,.06);
+        border:1px solid rgba(255,255,255,.10);
+      }
+      .pill .small{font-size:12px;color:var(--muted)}
+
+      /* ===== 参照图：拍摄技巧 + 机位打卡 ===== */
+      .spot-top{
+        padding: 0 16px 10px 16px;
+      }
+      .spot-name{
+        font-size: 20px;
+        font-weight: 950;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        background: linear-gradient(90deg, rgba(255,255,255,.96), rgba(255,255,255,.78));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-shadow: 0 16px 40px rgba(0,0,0,.45);
+      }
+      .spot-metaRow{
+        margin-top: 10px;
+        display:flex;
+        gap: 10px;
+        align-items:center;
+        flex-wrap: wrap;
+      }
+      .spot-chip{
+        display:flex;
+        align-items:center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255,255,255,.06);
+        border: 1px solid rgba(255,255,255,.10);
+        box-shadow: 0 12px 28px rgba(0,0,0,.22);
+        backdrop-filter: blur(10px);
+      }
+      .spot-chip .k{
+        font-size: 12px;
+        color: rgba(255,255,255,.70);
+        font-weight: 750;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+      }
+      .spot-chip .v{
+        font-size: 12px;
+        color: rgba(255,255,255,.92);
+        font-weight: 750;
+        letter-spacing: -0.01em;
+      }
+
+      .tips{
+        margin: 10px 0 12px 0;
+        padding: 12px 12px;
+        border-radius: 16px;
+        background: rgba(255,255,255,.05);
+        border: 1px solid rgba(255,255,255,.10);
+        box-shadow: 0 14px 34px rgba(0,0,0,.26);
+      }
+      .tips-head{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        margin-bottom: 8px;
+      }
+      .tips-title{
+        display:flex;
+        align-items:baseline;
+        gap: 8px;
+        font-weight: 900;
+        letter-spacing: -0.01em;
+        color: rgba(255,255,255,.94);
+      }
+      .tips-title .n{
+        font-size: 12px;
+        color: rgba(255,255,255,.62);
+        font-weight: 800;
+      }
+      .tips-lines{
+        display:flex;
+        flex-direction:column;
+        gap: 8px;
+        color: rgba(255,255,255,.80);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .tips-lines .line{
+        display:flex;
+        gap: 8px;
+      }
+      .tips-lines .dot{
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.42);
+        margin-top: 6px;
+        flex: 0 0 auto;
+      }
+      .section-title{
+        margin: 10px 0 12px 0;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+      }
+      .section-title .h{
+        font-size: 16px;
+        font-weight: 900;
+        color: rgba(255,255,255,.92);
+        letter-spacing: -0.01em;
+      }
+      .section-title .subh{
+        font-size: 12px;
+        color: rgba(255,255,255,.58);
+        font-weight: 750;
+      }
+
+      .scroll{
+        flex:1;
+        overflow:auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0 16px calc(14px + env(safe-area-inset-bottom)) 16px;
+        overscroll-behavior: contain;
+      }
+      .grid2{
+        display:grid;
+        grid-template-columns: repeat(2, minmax(0,1fr));
+        gap: 12px;
+      }
+      .card{
+        background: rgba(255,255,255,.04);
+        border:1px solid rgba(255,255,255,.08);
+        border-radius:16px;
+        overflow:hidden;
+        box-shadow: 0 10px 22px rgba(0,0,0,.28);
+      }
+      .photo{
+        width:100%;
+        display:block;
+        background:#0b0e14;
+      }
+      .video{
+        width:100%;
+        display:block;
+        background:#0b0e14;
+      }
+      .playBadge{
+        position:absolute;
+        left:10px;
+        top:10px;
+        width:30px;
+        height:30px;
+        border-radius:999px;
+        background: rgba(0,0,0,.42);
+        border:1px solid rgba(255,255,255,.10);
+        backdrop-filter: blur(10px);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        box-shadow: 0 10px 22px rgba(0,0,0,.35);
+        pointer-events:none;
+      }
+      .playBadge svg{display:block}
+      .meta{
+        padding:10px 10px 12px 10px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+      }
+      .user{
+        display:flex;align-items:center;gap:8px;
+        min-width:0;
+      }
+      .avatar{
+        width:22px;height:22px;border-radius:999px;
+        overflow:hidden;
+        border:1px solid rgba(255,255,255,.14);
+        flex:0 0 auto;
+      }
+      .name{
+        font-size:12px;
+        color:rgba(255,255,255,.82);
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        max-width:110px;
+      }
+      .likes{
+        display:flex;align-items:center;gap:6px;
+        font-size:12px;
+        color:rgba(255,255,255,.86);
+        flex:0 0 auto;
+      }
+      .likes .heart svg{width:13px;height:13px}
+
+      /* 轻提示 */
+      .toast{
+        position:absolute;
+        left:50%;
+        bottom: calc(60vh + 14px);
+        transform: translateX(-50%);
+        padding:10px 12px;
+        border-radius:999px;
+        background: rgba(0,0,0,.46);
+        border:1px solid rgba(255,255,255,.10);
+        backdrop-filter: blur(10px);
+        font-size:12px;
+        color:rgba(255,255,255,.88);
+        box-shadow: 0 14px 34px rgba(0,0,0,.42);
+        opacity:0;
+        pointer-events:none;
+        transition: opacity 220ms ease, transform 220ms ease;
+        z-index:40;
+      }
+      .toast.show{
+        opacity:1;
+        transform: translateX(-50%) translateY(-2px);
+      }
+
+      /* 错误兜底屏 */
+      .screen{
+        position:fixed;inset:0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:24px;
+        background: var(--bg);
+        color:#fff;
+        z-index:9999;
+      }
+      .screen .box{
+        width:min(420px, 100%);
+        background: rgba(255,255,255,.06);
+        border: 1px solid rgba(255,255,255,.10);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: var(--shadow);
+      }
+      .btn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        padding:10px 12px;
+        border-radius:12px;
+        border:1px solid rgba(255,255,255,.12);
+        background: rgba(255,255,255,.06);
+        color:#fff;
+        font-weight:700;
+        margin-top:12px;
+      }
+
+      /* 无障碍：减少动画 */
+      @media (prefers-reduced-motion: reduce){
+        .map-camera{transition:none !important}
+        .toast{transition:none !important}
+        .pop{animation:none !important}
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="w-full max-w-[430px] h-screen mx-auto relative"></div>
+
+    <script>
+      (function () {
+        "use strict";
+
+        /* ===========================
+           Mock 数据（坐标 x,y：0~100）
+        ============================ */
+        const MARKERS = [
+          {
+            id: "jzh",
+            name: "箭竹海",
+            area: "九寨沟",
+            locationTitle: "机位位于四川阿坝藏族羌族自治州",
+            locationSub: "九寨沟县漳扎镇九寨沟景区内（树正沟）",
+            tips: [
+              "构图：用倒影做对称；前景放树枝/栈道做引导线。",
+              "光线：上午 8:00-10:00 更通透，尽量避开正午硬光。",
+              "参数：手机 2× 取景，轻拉对比与高光，颜色更干净。",
+            ],
+            x: 58,
+            y: 46,
+            likes: 13200,
+            coverType: "file",
+            coverSrc: "assets/jzhzp.jpeg",
+            // “封面下的视频”
+            photos: [
+              { id: "jzh_v1", type: "video", src: "assets/jzh1.mp4", poster: "assets/jzh1.jpg", ratio: 1.25, user: mockUser(101), like: 1320 },
+              { id: "jzh_v2", type: "video", src: "assets/jzh2.mp4", poster: "assets/jzh2.jpg", ratio: 1.25, user: mockUser(155), like: 980 },
+              { id: "jzh_v3", type: "video", src: "assets/jzh3.mp4", poster: "assets/jzh3.jpg", ratio: 1.25, user: mockUser(203), like: 1660 },
+              { id: "jzh_v4", type: "video", src: "assets/jzh4.mp4", poster: "assets/jzh4.jpg", ratio: 1.25, user: mockUser(77), like: 740 },
+              { id: "jzh_v5", type: "video", src: "assets/jzh5.mp4", poster: "assets/jzh5.jpg", ratio: 1.25, user: mockUser(41), like: 1100 },
+            ],
+          },
+          {
+            id: "m1",
+            name: "海边日落栈道",
+            locationTitle: "机位位于海边栈道主视野一侧",
+            locationSub: "建议靠近护栏外侧拍摄，留出前景线条",
+            tips: [
+              "构图：人物/路牌放三分线；海平线保持水平。",
+              "光线：日落前 20 分钟最柔和，逆光更有氛围。",
+              "参数：曝光 -0.3，保住天空层次；适当加暖色。",
+            ],
+            x: 26,
+            y: 36,
+            likes: 12800,
+            coverSeed: 12,
+            photos: makePhotos("m1", 16, 21),
+          },
+          {
+            id: "m2",
+            name: "城市天桥夜景",
+            locationTitle: "机位位于天桥中段向主路方向",
+            locationSub: "注意安全，靠内侧栏杆拍摄更稳",
+            tips: [
+              "构图：车流做 S 形引导；上方留一点城市天际线。",
+              "光线：蓝调时刻（落日后 10-25 分钟）最好看。",
+              "参数：夜景模式/长曝光，稳住手机避免抖动。",
+            ],
+            x: 62,
+            y: 44,
+            likes: 8600,
+            coverSeed: 33,
+            photos: makePhotos("m2", 14, 77),
+          },
+          {
+            id: "m3",
+            name: "玻璃房咖啡馆",
+            locationTitle: "机位位于窗边 45° 侧光位",
+            locationSub: "桌面留白，玻璃反光记得避开",
+            tips: [
+              "构图：杯子放前景；背景虚化出环境感。",
+              "光线：靠窗侧光最显质感，避免顶光。",
+              "参数：0.5× 拍环境，2× 拍细节，混合更出片。",
+            ],
+            x: 50,
+            y: 66,
+            likes: 4200,
+            coverSeed: 64,
+            photos: makePhotos("m3", 12, 8),
+          },
+          {
+            id: "m4",
+            name: "樱花小路",
+            locationTitle: "机位位于小路转角处",
+            locationSub: "利用花枝做框景，人物走到光斑处",
+            tips: [
+              "构图：用花枝做前景框；人物居中或偏右更自然。",
+              "光线：阴天最均匀；晴天找树荫避免脸部强光。",
+              "参数：人像模式开，背景虚化别拉太大。",
+            ],
+            x: 78,
+            y: 30,
+            likes: 15600,
+            coverSeed: 91,
+            photos: makePhotos("m4", 18, 103),
+          },
+          {
+            id: "m5",
+            name: "老街拱门",
+            locationTitle: "机位位于拱门正中轴线",
+            locationSub: "等待行人穿过，画面更有故事感",
+            tips: [
+              "构图：保持垂直线；用拱门做天然取景框。",
+              "光线：下午侧光更立体；阴影别压太死。",
+              "参数：开网格线，微调水平，后期拉一点清晰度。",
+            ],
+            x: 40,
+            y: 22,
+            likes: 6900,
+            coverSeed: 5,
+            photos: makePhotos("m5", 13, 44),
+          },
+        ];
+
+        // 道路网络（0~100 的“地图坐标”）：既用于绘制虚拟地图，也用于 marker 避让路线
+        const ROADS = [
+          [
+            { x: 5, y: 44 }, { x: 18, y: 34 }, { x: 32, y: 36 }, { x: 46, y: 42 },
+            { x: 60, y: 50 }, { x: 72, y: 50 }, { x: 84, y: 40 }, { x: 96, y: 36 },
+          ],
+          [
+            { x: 37, y: 10 }, { x: 39, y: 26 }, { x: 42, y: 38 }, { x: 48, y: 52 },
+            { x: 55, y: 70 }, { x: 60, y: 92 },
+          ],
+        ];
+
+        function makePhotos(markerId, count, seed) {
+          const list = [];
+          for (let i = 0; i < count; i++) {
+            const ratio = pick([0.78, 0.86, 1.0, 1.22, 1.34], seed + i); // 高宽比（height/width）
+            const uSeed = (seed * 17 + i * 13) % 999;
+            list.push({
+              id: markerId + "_p" + i,
+              user: mockUser(uSeed),
+              like: Math.floor(80 + (uSeed * 37) % 2200),
+              ratio,
+              imageDataUrl: svgPhotoDataUrl(uSeed),
+            });
+          }
+          return list;
+        }
+
+        function mockUser(seed) {
+          const names = ["小麦", "阿丘", "Momo", "橘子汽水", "Yuki", "木木", "Kiki", "阿白", "小池", "Nina"];
+          const name = names[seed % names.length] + (seed % 7 === 0 ? "·" + (seed % 99) : "");
+          return {
+            name,
+            avatarDataUrl: svgAvatarDataUrl(name, seed),
+          };
+        }
+
+        /* ===========================
+           资源：使用 SVG Data URL 生成“本地占位图”
+           - 严禁外链图片 / 字体
+        ============================ */
+        function svgPhotoDataUrl(seed) {
+          const a = (seed * 29) % 360;
+          const b = (a + 62) % 360;
+          const c = (b + 46) % 360;
+          const g1 = `hsl(${a} 85% 62%)`;
+          const g2 = `hsl(${b} 90% 58%)`;
+          const g3 = `hsl(${c} 80% 66%)`;
+          const noise = ((seed * 13) % 8) + 10;
+          const svg =
+            `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1040" viewBox="0 0 800 1040">` +
+            `<defs>` +
+            `<linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+            `<stop offset="0" stop-color="${g1}"/><stop offset="0.55" stop-color="${g2}"/><stop offset="1" stop-color="${g3}"/>` +
+            `</linearGradient>` +
+            `<filter id="n">` +
+            `<feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" seed="${noise}"/>` +
+            `<feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .22 0"/>` +
+            `</filter>` +
+            `</defs>` +
+            `<rect width="800" height="1040" fill="url(#g)"/>` +
+            `<rect width="800" height="1040" filter="url(#n)" opacity=".55"/>` +
+            `<circle cx="${140 + (seed % 9) * 56}" cy="${220 + (seed % 7) * 48}" r="${80 + (seed % 6) * 12}" fill="rgba(255,255,255,.18)"/>` +
+            `<circle cx="${540 + (seed % 8) * 22}" cy="${720 + (seed % 6) * 44}" r="${120 + (seed % 5) * 10}" fill="rgba(0,0,0,.12)"/>` +
+            `</svg>`;
+          return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+        }
+
+        function svgAvatarDataUrl(name, seed) {
+          const a = (seed * 41) % 360;
+          const b = (a + 88) % 360;
+          const bg1 = `hsl(${a} 80% 56%)`;
+          const bg2 = `hsl(${b} 85% 52%)`;
+          const letter = (name || "U").trim().slice(0, 1);
+          const svg =
+            `<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72">` +
+            `<defs>` +
+            `<linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+            `<stop offset="0" stop-color="${bg1}"/><stop offset="1" stop-color="${bg2}"/>` +
+            `</linearGradient>` +
+            `</defs>` +
+            `<rect width="72" height="72" rx="36" fill="url(#g)"/>` +
+            `<circle cx="24" cy="26" r="12" fill="rgba(255,255,255,.22)"/>` +
+            `<text x="36" y="44" font-size="28" text-anchor="middle" fill="rgba(255,255,255,.92)" font-family="ui-sans-serif,system-ui" font-weight="700">${escapeXml(letter)}</text>` +
+            `</svg>`;
+          return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+        }
+
+        function svgCoverDataUrl(seed) {
+          // 用于地图 marker 的“封面图”（圆形裁切）
+          const a = (seed * 23) % 360;
+          const b = (a + 70) % 360;
+          const c = (b + 40) % 360;
+          const g1 = `hsl(${a} 86% 62%)`;
+          const g2 = `hsl(${b} 90% 58%)`;
+          const g3 = `hsl(${c} 82% 66%)`;
+          const svg =
+            `<svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">` +
+            `<defs>` +
+            `<radialGradient id="r" cx="40%" cy="30%" r="75%">` +
+            `<stop offset="0" stop-color="${g1}"/><stop offset="0.55" stop-color="${g2}"/><stop offset="1" stop-color="${g3}"/>` +
+            `</radialGradient>` +
+            `</defs>` +
+            `<rect width="260" height="260" fill="url(#r)"/>` +
+            `<path d="M0 176 C 56 140, 96 210, 170 170 C 212 146, 232 168, 260 152 L 260 260 L 0 260 Z" fill="rgba(0,0,0,.16)"/>` +
+            `<circle cx="${90 + (seed % 7) * 9}" cy="${92 + (seed % 5) * 11}" r="${52 + (seed % 6) * 6}" fill="rgba(255,255,255,.14)"/>` +
+            `</svg>`;
+          return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+        }
+
+        function svgParkMapDataUrl(seed) {
+          // 平面虚拟地图（离线生成）：用“地图图层语义”来画草地/水域/道路/地标点
+          // 不追求真实坐标，仅提供“像地图”的结构与层级，适合做上半屏底部背景。
+          // 颜色策略：强制偏“绿/灰”调，避免出现紫色系
+          const hue = 135 + ((seed * 7) % 18); // 135~152（绿）
+          const bg1 = `hsl(${hue} 18% 12%)`;
+          const bg2 = `hsl(${hue} 16% 9%)`;
+          const grass = `hsl(${hue} 32% 16%)`;
+          const grass2 = `hsl(${hue} 28% 14%)`;
+          const water = `hsl(${(hue + 58) % 360} 38% 18%)`; // 偏青蓝，但不走紫
+          const road = `rgba(255,255,255,.16)`;
+          const roadEdge = `rgba(0,0,0,.22)`;
+          const poiBlue = "#4DA3FF";
+          const poiWarm = "#FFB020";
+          const roadsSvg = ROADS.map((poly) => {
+            const pts = poly.map((p) => `${p.x},${p.y}`).join(" ");
+            return (
+              `<polyline points="${pts}" fill="none" stroke="${roadEdge}" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" opacity=".58"/>` +
+              `<polyline points="${pts}" fill="none" stroke="${road}" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" opacity=".92"/>`
+            );
+          }).join("");
+
+          const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${bg1}"/>
+      <stop offset="1" stop-color="${bg2}"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.2"/>
+    </filter>
+  </defs>
+
+  <rect width="100" height="100" fill="url(#bg)"/>
+
+  <!-- 草地 -->
+  <path d="M0 62 C 18 54, 32 62, 43 66 C 62 73, 82 75, 100 70 L 100 100 L 0 100 Z"
+        fill="${grass}" opacity=".92"/>
+  <path d="M8 70 C 20 66, 28 74, 38 70 C 52 64, 63 76, 74 70 C 84 64, 90 66, 100 70"
+        fill="${grass2}" opacity=".78"/>
+
+  <!-- 水域 -->
+  <path d="M66 72 C 72 68, 84 69, 92 76 C 98 82, 91 92, 79 92 C 70 92, 62 86, 63 80 C 63.5 76.5, 64 74, 66 72 Z"
+        fill="${water}" opacity=".86" filter="url(#soft)"/>
+  <path d="M15 80 C 22 76, 32 78, 36 83 C 40 88, 35 94, 26 94 C 19 94, 13 91, 13.5 86.5 C 13.9 83.8, 14.4 81.3, 15 80 Z"
+        fill="${water}" opacity=".55" filter="url(#soft)"/>
+
+  <!-- 道路（与 ROADS 1:1 对齐） -->
+  ${roadsSvg}
+
+  <!-- 广场/区域 -->
+  <path d="M30 41 C 36 38, 44 40, 48 45 C 52 50, 47 57, 40 57 C 33 57, 27 48, 30 41 Z"
+        fill="rgba(255,255,255,.08)" opacity=".80"/>
+
+  <!-- 地标点（点缀） -->
+  ${mapDot(30, 46, poiBlue)}
+  ${mapDot(44, 60, poiBlue)}
+  ${mapDot(50, 68, poiWarm)}
+  ${mapDot(78, 58, poiWarm)}
+</svg>`.trim();
+
+          return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+        }
+
+        function poiPin(x, y, color, text) {
+          const safeText = escapeXml(text);
+          return (
+            `<g filter="url(#shadow)" opacity=".98">` +
+              `<path d="M ${x} ${y} c -18 0 -32 14 -32 32 c 0 26 32 58 32 58 s 32 -32 32 -58 c 0 -18 -14 -32 -32 -32 z" fill="${color}"/>` +
+              `<circle cx="${x}" cy="${y+30}" r="12" fill="rgba(255,255,255,.92)"/>` +
+              `<rect x="${x-5}" y="${y+22}" width="10" height="16" rx="5" fill="${color}" opacity=".85"/>` +
+              `<path d="M ${x} ${y+44} l -10 0" stroke="${color}" stroke-width="2" opacity=".0"/>` +
+              `<g>` +
+                `<rect x="${x-4}" y="${y+26}" width="8" height="8" rx="2" fill="${color}" opacity=".75"/>` +
+              `</g>` +
+              `<g>` +
+                `<rect x="${x+18}" y="${y+22}" rx="10" ry="10" width="${52 + safeText.length * 14}" height="28" fill="rgba(255,255,255,.92)" />` +
+                `<text x="${x+32}" y="${y+42}" font-family="ui-sans-serif,system-ui" font-size="18" font-weight="800" fill="${color}">${safeText}</text>` +
+              `</g>` +
+            `</g>`
+          );
+        }
+
+        function starBadge(x, y, color, text) {
+          const safeText = escapeXml(text);
+          return (
+            `<g filter="url(#shadow)" opacity=".98">` +
+              `<circle cx="${x}" cy="${y}" r="18" fill="${color}"/>` +
+              `<path d="M ${x} ${y-9} l 4 7 l 8 2 l -6 6 l 1 9 l -7 -4 l -7 4 l 1 -9 l -6 -6 l 8 -2 z" fill="rgba(255,255,255,.92)"/>` +
+              `<text x="${x+30}" y="${y+7}" font-family="ui-sans-serif,system-ui" font-size="20" font-weight="900" fill="${color}">${safeText}</text>` +
+            `</g>`
+          );
+        }
+
+        function isoTree(x, y) {
+          // “等距树”：一团圆顶 + 小小侧面，增强立体层级
+          const c1 = "rgba(34, 197, 94, .55)";
+          const c2 = "rgba(34, 197, 94, .28)";
+          const trunk = "rgba(255,255,255,.20)";
+          return `
+  <g opacity=".92">
+    <ellipse cx="${x}" cy="${y}" rx="18" ry="10" fill="${c2}"/>
+    <ellipse cx="${x}" cy="${y-10}" rx="22" ry="14" fill="${c1}"/>
+    <ellipse cx="${x+10}" cy="${y-6}" rx="14" ry="9" fill="${c2}"/>
+    <rect x="${x-2}" y="${y-4}" width="4" height="16" rx="2" fill="${trunk}" opacity=".65"/>
+  </g>`;
+        }
+
+        function isoBlock(x, y, w, h) {
+          // “等距盒子建筑”：顶面 + 侧面 + 正面（坐标为手工拟合）
+          const top = "rgba(255,255,255,.16)";
+          const faceA = "rgba(0,0,0,.22)";
+          const faceB = "rgba(0,0,0,.30)";
+          const dx = Math.round(w * 0.35);
+          const dy = Math.round(w * 0.22);
+          const height = Math.round(h * 0.9);
+          const pTop = [
+            [x, y],
+            [x + w, y - dy],
+            [x + w + dx, y + dy],
+            [x + dx, y + 2 * dy],
+          ];
+          const pSide = [
+            [x + w, y - dy],
+            [x + w + dx, y + dy],
+            [x + w + dx, y + dy + height],
+            [x + w, y - dy + height],
+          ];
+          const pFront = [
+            [x + dx, y + 2 * dy],
+            [x + w + dx, y + dy],
+            [x + w + dx, y + dy + height],
+            [x + dx, y + 2 * dy + height],
+          ];
+
+          const pts = (arr) => arr.map(([a, b]) => `${a},${b}`).join(" ");
+          return `
+  <g opacity=".92">
+    <polygon points="${pts(pTop)}" fill="${top}" />
+    <polygon points="${pts(pSide)}" fill="${faceA}" opacity=".85"/>
+    <polygon points="${pts(pFront)}" fill="${faceB}" opacity=".8"/>
+    <rect x="${x + dx + 18}" y="${y + 2 * dy + 22}" width="${Math.max(24, Math.round(w * 0.22))}" height="10" rx="5" fill="rgba(255,255,255,.14)" opacity=".9"/>
+  </g>`;
+        }
+
+        function mapDot(x, y, color) {
+          return `
+  <g opacity=".92">
+    <circle cx="${x}" cy="${y}" r="1.35" fill="rgba(0,0,0,.28)"/>
+    <circle cx="${x}" cy="${y}" r="0.95" fill="${color}"/>
+    <circle cx="${x-0.28}" cy="${y-0.28}" r="0.28" fill="rgba(255,255,255,.75)"/>
+  </g>`;
+        }
+
+        function getMarkerOffsetBase(marker, sizePx) {
+          // 目标：
+          // 1) “一一对应”：marker 的锚点始终是 marker.(x,y)
+          // 2) “不遮挡路线”：当锚点靠近道路时，把“圆形气泡”整体偏移到道路旁边（锚点不动）
+          const rect = mapWrap.getBoundingClientRect();
+          const key = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+          const sizeBucket = Math.round(sizePx / 6) * 6;
+          if (state.offsetCache && state.offsetCache.key === key && state.offsetCache.offsets && state.offsetCache.offsets.has(marker.id)) {
+            const cached = state.offsetCache.offsets.get(marker.id);
+            if (cached && cached.sizeBucket === sizeBucket) return cached;
+          }
+
+          const anchor = { x: marker.x, y: marker.y };
+          const hit = nearestRoadPoint(anchor, state.roads);
+
+          // 道路避让半径（单位：0~100），与 marker 尺寸相关
+          const roadRadius = pxToMapUnits((sizePx * 0.62) + 14, rect.width);
+          let dxU = 0, dyU = 0;
+
+          if (hit && hit.dist < roadRadius) {
+            const pushU = (roadRadius - hit.dist) + pxToMapUnits(10, rect.width);
+            const vx = anchor.x - hit.p.x;
+            const vy = anchor.y - hit.p.y;
+            const len = Math.sqrt(vx * vx + vy * vy) || 1;
+            dxU = (vx / len) * pushU;
+            dyU = (vy / len) * pushU;
+          }
+
+          // 把偏移从“地图单位”换算为像素，方便画连线/偏移气泡
+          let dx = mapUnitsToPx(dxU, rect.width);
+          let dy = mapUnitsToPx(dyU, rect.width);
+
+          // 限制最大偏移，避免气泡飞太远
+          const max = 86;
+          dx = clamp(dx, -max, max);
+          dy = clamp(dy, -max, max);
+
+          // 边界兜底：靠近边缘时，把气泡往屏幕内侧推一点
+          if (anchor.x < 12 && dx < 0) dx = Math.abs(dx);
+          if (anchor.x > 88 && dx > 0) dx = -Math.abs(dx);
+          if (anchor.y < 12 && dy < 0) dy = Math.abs(dy);
+          if (anchor.y > 88 && dy > 0) dy = -Math.abs(dy);
+
+          const value = { dx, dy, sizeBucket };
+          if (!state.offsetCache || state.offsetCache.key !== key) {
+            state.offsetCache = { key, offsets: new Map() };
+          }
+          state.offsetCache.offsets.set(marker.id, value);
+          return value;
+        }
+
+        function getMarkerOffset(marker, sizePx) {
+          // 渲染期的“无重叠”偏移优先（每次 renderMarkers 计算一遍）
+          try {
+            if (state.renderOffsetMap && state.renderOffsetMap.has(marker.id)) {
+              const v = state.renderOffsetMap.get(marker.id);
+              if (v) return v;
+            }
+          } catch (_) {}
+          return getMarkerOffsetBase(marker, sizePx);
+        }
+
+        function pxToMapUnits(px, baseWidthPx) {
+          // 以容器宽度为基准，把像素近似换算到 0~100 的坐标单位
+          if (!baseWidthPx) return px * 0.12;
+          return (px / baseWidthPx) * 100;
+        }
+
+        function mapUnitsToPx(units, baseWidthPx) {
+          if (!baseWidthPx) return units * 8;
+          return (units / 100) * baseWidthPx;
+        }
+
+        function nearestRoadPoint(pt, roads) {
+          let best = null;
+          for (const poly of roads) {
+            for (let i = 0; i < poly.length - 1; i++) {
+              const a = poly[i], b = poly[i + 1];
+              const res = closestPointOnSegment(pt, a, b);
+              if (!best || res.dist < best.dist) best = res;
+            }
+          }
+          return best;
+        }
+
+        function closestPointOnSegment(p, a, b) {
+          const abx = b.x - a.x, aby = b.y - a.y;
+          const apx = p.x - a.x, apy = p.y - a.y;
+          const ab2 = abx * abx + aby * aby || 1;
+          let t = (apx * abx + apy * aby) / ab2;
+          t = clamp(t, 0, 1);
+          const x = a.x + abx * t;
+          const y = a.y + aby * t;
+          const dx = p.x - x, dy = p.y - y;
+          return { p: { x, y }, dist: Math.sqrt(dx * dx + dy * dy) };
+        }
+
+        function escapeXml(s) {
+          return String(s).replace(/[<>&"]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[ch]));
+        }
+
+        function pick(arr, seed) {
+          return arr[Math.abs(seed) % arr.length];
+        }
+
+        function formatLikes(n) {
+          if (n >= 10000) return (n / 10000).toFixed(n >= 100000 ? 0 : 1) + "w";
+          if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+          return String(n);
+        }
+
+        /* ===========================
+           UI 构建（DOM 方式模拟 React 组件）
+           - 满足：单文件、离线、触屏优先、无 hover、无滚轮依赖
+        ============================ */
+        const app = document.getElementById("app");
+        if (!app) throw new Error("App mount node not found");
+
+        // 缓加载：初始只展示少量聚合点，点击后逐步解锁更多
+        const INIT_UNLOCK_IDS = MARKERS
+          .slice()
+          .sort((a, b) => b.likes - a.likes)
+          .slice(0, 3)
+          .map((m) => m.id);
+
+        const state = {
+          selectedId: topMarker().id,
+          // panelY：面板向下位移（0=展开覆盖更多地图，正值=收起露出更多地图）
+          panelY: 0,
+          toastTimer: null,
+          camera: { x: 0, y: 0, scale: 1 },
+          cameraAnimToken: 0,
+          me: { x: 54, y: 54, source: "mock" }, // 默认 mock（后续尝试用地理定位更新）
+          userInteracted: false, // 用户是否手动拖拽过地图（拖拽后不再强制自动对焦）
+          // 道路网络（0~100 的“地图坐标”），用于避免 marker 遮挡路线
+          roads: ROADS,
+          offsetCache: null, // { key, offsets: Map<markerId,{dx,dy,sizeBucket}> }
+          unlockedIds: new Set(INIT_UNLOCK_IDS),
+          newlyUnlockedIds: new Set(), // 本轮 render 需要播放入场动画的 id
+          unlockTimer: null,
+          videoThumbCache: new Map(), // src -> dataUrl
+          videoThumbPending: new Set(), // src
+        };
+
+        // 首屏把初始点也做一次轻入场
+        INIT_UNLOCK_IDS.forEach((id) => state.newlyUnlockedIds.add(id));
+
+        // 初始把面板稍微下移一些，形成“地图+抽屉”比例
+        // （面板本身高度=60vh，向下位移=0 时就是默认；向下位移>0 会露出更多地图）
+        state.panelY = 0; // 默认不额外下移
+
+        /* 根结构 */
+        const root = el("div", { className: "relative w-full h-screen overflow-hidden" });
+
+        const mapWrap = el("div", { className: "map-wrap" });
+        const mapBg = el("div", { className: "map-bg" });
+        const focusGlow = el("div", { className: "focus-glow", "aria-hidden": "true" });
+        const parkLayer = el("div", { className: "park-layer", "aria-hidden": "true" });
+        parkLayer.style.backgroundImage = `url("${svgParkMapDataUrl(7)}")`;
+        // 聚合点坐标与底图 1:1：禁止裁切（cover），采用完全拉伸匹配坐标系
+        parkLayer.style.backgroundSize = "100% 100%";
+        parkLayer.style.backgroundPosition = "center";
+        const mapGrid = el("div", { className: "map-grid" });
+        const camera = el("div", { className: "map-camera", "aria-hidden": "false" });
+        const markersLayer = el("div", { className: "markers-layer", "aria-hidden": "false" });
+
+        mapWrap.appendChild(mapBg);
+        mapWrap.appendChild(focusGlow);
+        mapWrap.appendChild(camera);
+
+        // 关键：把“底部虚拟地图”放进 camera 内部，跟随 Zoom & Pan，保证坐标体系一致
+        camera.appendChild(mapGrid);
+        camera.appendChild(parkLayer);
+        camera.appendChild(markersLayer);
+
+        const toast = el("div", { className: "toast", role: "status", "aria-live": "polite" }, "已切换到该打卡点");
+        root.appendChild(mapWrap);
+        root.appendChild(toast);
+
+        /* 顶部 bar（已按需求去掉“同款打卡热度地图”等文案） */
+
+        /* 面板 */
+        const panel = el("div", { className: "panel z-30", role: "region", "aria-label": "拍照打卡面板" });
+        const panelInner = el("div", { className: "panel-inner" });
+        const handle = el("div", { className: "handle", role: "button", tabindex: "0", "aria-label": "拖拽调整面板" });
+        handle.appendChild(el("div", { className: "bar" }));
+
+        // 参照图：顶部信息（地点名 + 机位信息），仅保留“拍摄技巧 + 机位打卡”
+        const spotTop = el("div", { className: "spot-top" });
+        const spotName = el("div", { className: "spot-name" }, "");
+        const spotMetaRow = el("div", { className: "spot-metaRow" });
+
+        const chipLoc = el("div", { className: "spot-chip" });
+        chipLoc.appendChild(el("div", { className: "k" }, "机位位置"));
+        const chipLocV = el("div", { className: "v" }, "—");
+        chipLoc.appendChild(chipLocV);
+
+        spotMetaRow.appendChild(chipLoc);
+        spotTop.appendChild(spotName);
+        spotTop.appendChild(spotMetaRow);
+
+        const scroll = el("div", { className: "scroll" });
+        const tips = el("div", { className: "tips" });
+        const tipsHead = el("div", { className: "tips-head" });
+        const tipsTitle = el("div", { className: "tips-title" });
+        tipsTitle.appendChild(el("div", {}, "拍摄技巧"));
+        const tipsNo = el("div", { className: "n" }, "1");
+        tipsTitle.appendChild(tipsNo);
+        tipsHead.appendChild(tipsTitle);
+        tips.appendChild(tipsHead);
+        const tipsLines = el("div", { className: "tips-lines" });
+        tips.appendChild(tipsLines);
+
+        const sectionTitle = el("div", { className: "section-title" });
+        sectionTitle.appendChild(el("div", { className: "h" }, "机位打卡"));
+        const checkinSub = el("div", { className: "subh" }, "");
+        sectionTitle.appendChild(checkinSub);
+
+        const grid = el("div", { className: "grid2" });
+        scroll.appendChild(tips);
+        scroll.appendChild(sectionTitle);
+        scroll.appendChild(grid);
+
+        panelInner.appendChild(handle);
+        panelInner.appendChild(spotTop);
+        panelInner.appendChild(scroll);
+        panel.appendChild(panelInner);
+        root.appendChild(panel);
+
+        app.appendChild(root);
+
+        /* 渲染 */
+        renderAll();
+
+        // 如果作为 iframe 被“推荐流卡片”加载：默认不自动播放入场动画，等待父页面通知再播放
+        const EMBEDDED = (() => {
+          try { return window.self !== window.top; } catch (_) { return true; }
+        })();
+
+        // 入场时先把面板藏到屏幕下方，等 intro 再上拉
+        // 抽屉初始必须完全在屏幕下方（避免“黑边/空白”漏出来），因此用 >100vh 的位移确保隐藏
+        const INTRO_PANEL_Y = Math.round(window.innerHeight + 80);
+        if (EMBEDDED) {
+          state.panelY = INTRO_PANEL_Y;
+          renderPanelTransform();
+        }
+
+        enablePanelDrag();
+        enableMapPan();
+
+        let introRunning = false;
+
+        function animatePanelTo(targetY, durationMs) {
+          const from = state.panelY;
+          const start = performance.now();
+          const d = Math.max(240, durationMs || 720);
+          const ease = (t) => 1 - Math.pow(1 - t, 3);
+          const tick = (now) => {
+            const p = Math.min(1, (now - start) / d);
+            state.panelY = Math.round(from + (targetY - from) * ease(p));
+            renderPanelTransform();
+            if (p < 1) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }
+
+        function panelPeekY() {
+          // 下拉框“取消”但留一个可见把手（不然收起后无法再拉起）
+          try {
+            const h = panel.getBoundingClientRect().height || 0;
+            // 露出约 26px（含 handle 区），其余隐藏到屏幕下方
+            return Math.max(0, Math.round(h - 26));
+          } catch (_) {
+            return 0;
+          }
+        }
+
+        function collapsePanelPeek(durationMs) {
+          try {
+            animatePanelTo(panelPeekY(), durationMs || 320);
+          } catch (_) {}
+        }
+
+        function resetForIntro() {
+          try {
+            if (state.unlockTimer) {
+              clearInterval(state.unlockTimer);
+              state.unlockTimer = null;
+            }
+            if (state.toastTimer) {
+              clearTimeout(state.toastTimer);
+              state.toastTimer = null;
+            }
+          } catch (_) {}
+
+          // 取消进行中的镜头动画
+          state.cameraAnimToken++;
+
+          // 重置关键状态：选中点、解锁点、面板位置、定位点
+          state.selectedId = topMarker().id;
+          state.unlockedIds = new Set(INIT_UNLOCK_IDS);
+          state.newlyUnlockedIds = new Set(INIT_UNLOCK_IDS);
+          state.panelY = INTRO_PANEL_Y;
+          state.me = { x: 54, y: 54, source: "mock" };
+          state.offsetCache = null;
+
+          // 重置聚焦光晕
+          try { focusGlow.classList.remove("show"); } catch (_) {}
+
+          // 重置镜头到起始位
+          try {
+            const start = { x: 0, y: 0, scale: 1.06 };
+            state.camera = clampCamera(start);
+            applyCameraTransform(state.camera);
+          } catch (_) {}
+
+          // 重绘
+          try {
+            renderAll();
+            renderPanelTransform();
+          } catch (_) {}
+        }
+
+        function playIntro() {
+          if (introRunning) return;
+          introRunning = true;
+
+          // 1) “模拟定位”（不弹权限）
+          showToast("正在定位…");
+          initLocation();
+
+          // 2) 镜头先对准“你的位置”（未授权则为 mock 位置）
+          setTimeout(() => {
+            try { focusCameraToMe(980); } catch (_) {}
+          }, 220);
+
+          // 3) “圆圈浮动上来” + 解锁更多点（markerIn 动画会从下往上浮动）
+          setTimeout(() => {
+            try { cascadeUnlockMarkers(); } catch (_) {}
+          }, 760);
+
+          // 4) 打卡照片抽屉从下往上“拉起来”
+          setTimeout(() => {
+            showToast("为你加载附近打卡照片…");
+            animatePanelTo(0, 760);
+            // 抽屉拉起后，再用“上半屏可视区域”的中心重新对齐一次你的当前位置（避免出现你说的“随机定位感”）
+            if (!state.userInteracted) {
+              setTimeout(() => {
+                try { focusCameraToMe(780); } catch (_) {}
+              }, 520);
+            }
+            // 结束运行态（允许下次重播）
+            setTimeout(() => { introRunning = false; }, 860);
+          }, 1080);
+        }
+
+        if (!EMBEDDED) {
+          // 单独打开 bars.html 时，直接播放入场
+          resetForIntro();
+          playIntro();
+        } else {
+          // iframe 内：等待父页面通知
+          window.addEventListener("message", (ev) => {
+            try {
+              if (ev && ev.data && ev.data.type === "bars-intro") {
+                resetForIntro(); // 每次进入都重置再播
+                playIntro();
+              }
+            } catch (_) {}
+          });
+          // 兜底：首次加载后自动播一次，保证体验完整
+          setTimeout(() => {
+            resetForIntro();
+            playIntro();
+          }, 700);
+        }
+
+        // 初始选中点若是封面图，也做一次背景取色
+        try {
+          const init = MARKERS.find((x) => x.id === state.selectedId);
+          if (init) applyFocusFromMarker(init);
+        } catch (_) {}
+        window.addEventListener("resize", () => {
+          try {
+            state.offsetCache = null;
+            renderMarkers();
+          } catch (_) {}
+        });
+
+        /* ========== 函数实现 ========== */
+        function el(tag, attrs, children) {
+          const node = document.createElement(tag);
+          if (attrs) {
+            Object.keys(attrs).forEach((k) => {
+              if (k === "className") node.className = attrs[k];
+              else if (k === "tabindex") node.tabIndex = attrs[k];
+              else node.setAttribute(k, attrs[k]);
+            });
+          }
+          if (children !== undefined) {
+            if (Array.isArray(children)) children.forEach((c) => append(node, c));
+            else append(node, children);
+          }
+          return node;
+        }
+
+        function append(parent, child) {
+          if (child === null || child === undefined) return;
+          if (typeof child === "string" || typeof child === "number") parent.appendChild(document.createTextNode(String(child)));
+          else parent.appendChild(child);
+        }
+
+        function heartIcon(size) {
+          const span = el("span", { className: "heart", "aria-hidden": "true" });
+          span.style.width = size + "px";
+          span.style.height = size + "px";
+          span.innerHTML =
+            `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" focusable="false">` +
+            `<path class="heartFill" d="M12 21s-6.7-4.3-9.4-8C.6 9.5 2.1 6.7 5 6c1.6-.4 3.2.1 4.3 1.3L12 9.9l2.7-2.6C15.8 6.1 17.4 5.6 19 6c2.9.7 4.4 3.5 2.4 7-2.7 3.7-9.4 8-9.4 8z"/>` +
+            `</svg>`;
+          return span;
+        }
+
+        function topMarker() {
+          return MARKERS.slice().sort((a, b) => b.likes - a.likes)[0];
+        }
+
+        function nearestMarkerTo(pt) {
+          const x = pt?.x ?? 54;
+          const y = pt?.y ?? 54;
+          let best = null;
+          let bestD = Infinity;
+          for (const m of MARKERS) {
+            const dx = m.x - x;
+            const dy = m.y - y;
+            const d = dx * dx + dy * dy;
+            if (d < bestD) {
+              bestD = d;
+              best = m;
+            }
+          }
+          return best;
+        }
+
+        function ensureNearestMarkerUnlocked() {
+          const near = nearestMarkerTo(state.me);
+          if (!near) return;
+          if (!state.unlockedIds.has(near.id)) {
+            state.unlockedIds.add(near.id);
+            state.newlyUnlockedIds.add(near.id);
+          }
+        }
+
+        function markerSize(likes) {
+          // 赞数越多越大：范围约 54~92
+          const min = 54, max = 92;
+          const lMin = 3200, lMax = 16000;
+          const t = clamp((likes - lMin) / (lMax - lMin), 0, 1);
+          return Math.round(min + (max - min) * easeOutCubic(t));
+        }
+
+        function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+        function easeInOut(t) { return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2; }
+        function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+        function renderAll() {
+          renderMarkers();
+          renderFeed();
+          renderPanelTransform();
+        }
+
+        function renderMarkers() {
+          markersLayer.innerHTML = "";
+          const sorted = MARKERS.slice().sort((a, b) => a.likes - b.likes); // 由小到大，便于 z-index 叠加
+          let appearIndex = 0;
+          // 计算一轮“无重叠”偏移（在 0~100 坐标系里做轻量碰撞分离）
+          state.renderOffsetMap = new Map();
+          const placed = [];
+          const rect = mapWrap.getBoundingClientRect();
+
+          function clampOffsetWithEdges(anchor, dx, dy) {
+            const max = 86;
+            dx = clamp(dx, -max, max);
+            dy = clamp(dy, -max, max);
+            if (anchor.x < 12 && dx < 0) dx = Math.abs(dx);
+            if (anchor.x > 88 && dx > 0) dx = -Math.abs(dx);
+            if (anchor.y < 12 && dy < 0) dy = Math.abs(dy);
+            if (anchor.y > 88 && dy > 0) dy = -Math.abs(dy);
+            return { dx, dy };
+          }
+
+          function computeNonOverlapOffset(m, size) {
+            const base = getMarkerOffsetBase(m, size);
+            const anchor = { x: m.x, y: m.y };
+            let dx = base.dx, dy = base.dy;
+
+            const dxU0 = pxToMapUnits(dx, rect.width);
+            const dyU0 = pxToMapUnits(dy, rect.width);
+            let cxU = anchor.x + dxU0;
+            let cyU = anchor.y + dyU0;
+            const rU = pxToMapUnits(size * 0.5 + 10, rect.width);
+
+            // 迭代式分离（很轻量，点数不多）
+            for (let iter = 0; iter < 10; iter++) {
+              let pushX = 0, pushY = 0;
+              let collided = false;
+              for (const p of placed) {
+                const vx = cxU - p.xU;
+                const vy = cyU - p.yU;
+                const dist = Math.sqrt(vx * vx + vy * vy) || 0.0001;
+                const minD = rU + p.rU;
+                if (dist < minD) {
+                  collided = true;
+                  const k = (minD - dist) / minD;
+                  pushX += (vx / dist) * k;
+                  pushY += (vy / dist) * k;
+                }
+              }
+              if (!collided) break;
+              const len = Math.sqrt(pushX * pushX + pushY * pushY) || 1;
+              // 每轮推动一点点，避免“飞出去”
+              cxU = clamp(cxU + (pushX / len) * 1.6, 6, 94);
+              cyU = clamp(cyU + (pushY / len) * 1.6, 6, 94);
+            }
+
+            dx = mapUnitsToPx(cxU - anchor.x, rect.width);
+            dy = mapUnitsToPx(cyU - anchor.y, rect.width);
+            const clamped = clampOffsetWithEdges(anchor, dx, dy);
+            dx = clamped.dx; dy = clamped.dy;
+
+            // 记录占位：用“最终气泡中心”作为碰撞基准
+            const cxUFinal = anchor.x + pxToMapUnits(dx, rect.width);
+            const cyUFinal = anchor.y + pxToMapUnits(dy, rect.width);
+            placed.push({ xU: cxUFinal, yU: cyUFinal, rU });
+
+            return { dx, dy, sizeBucket: base.sizeBucket };
+          }
+
+          sorted.forEach((m) => {
+            if (!state.unlockedIds.has(m.id)) return;
+            const size = markerSize(m.likes);
+            const offset = computeNonOverlapOffset(m, size);
+            state.renderOffsetMap.set(m.id, offset);
+            const node = renderMarker(m);
+            if (state.newlyUnlockedIds.has(m.id)) {
+              // 每个圆圈“一个一个跳”，但用轻微错峰让节奏更灵动
+              const d = Math.min(480, appearIndex * 80);
+              node.style.setProperty("--d", `${d}ms`);
+              appearIndex += 1;
+            }
+            markersLayer.appendChild(node);
+          });
+          markersLayer.appendChild(renderMe());
+          // 清空“本轮新解锁”标记，避免重复入场
+          state.newlyUnlockedIds.clear();
+          // 下一轮 renderMarkers 会重新计算，避免持续累积
+          state.renderOffsetMap = null;
+        }
+
+        function renderMe() {
+          const me = el("div", { className: "me", "aria-label": "你的当前位置" });
+          me.style.left = state.me.x + "%";
+          me.style.top = state.me.y + "%";
+          return me;
+        }
+
+        function renderMarker(m) {
+          const size = markerSize(m.likes);
+          const z = 10 + Math.round((m.likes / 1000)); // 赞越多层级越高
+          const offset = getMarkerOffset(m, size);
+          const wrapper = el("div", { className: "marker" });
+          if (state.newlyUnlockedIds.has(m.id)) wrapper.classList.add("appear");
+          // 锚点坐标始终与“虚拟地图底图”一致（一一对应）
+          wrapper.style.left = m.x + "%";
+          wrapper.style.top = m.y + "%";
+          wrapper.style.zIndex = String(m.id === state.selectedId ? 9999 : z); // 点击的点始终最前
+          if (m.id === state.selectedId) wrapper.classList.add("selected");
+
+          const anchorLine = el("div", { className: "anchor-line", "aria-hidden": "true" });
+          const anchorDot = el("div", { className: "anchor-dot", "aria-hidden": "true" });
+
+          const btn = document.createElement("button");
+          btn.setAttribute("type", "button");
+          btn.setAttribute("aria-label", `选择打卡点：${m.name}`);
+          btn.style.width = size + "px";
+          btn.style.height = size + "px";
+          btn.addEventListener("click", () => onTapMarker(m.id));
+          btn.addEventListener("pointerdown", (e) => {
+            // 触屏优先：防止双击缩放等副作用
+            e.preventDefault();
+          }, { passive: false });
+
+          const bubbleWrap = el("div", { className: "bubble-wrap" });
+          bubbleWrap.style.transform = `translate3d(${offset.dx}px, ${offset.dy}px, 0)`;
+
+          const bubble = el("div", { className: "bubble" });
+          bubble.style.width = size + "px";
+          bubble.style.height = size + "px";
+
+          const ring = el("div", { className: "ring" });
+          const cover = el("img", { className: "cover", alt: "" });
+          cover.src = m.coverType === "file" ? m.coverSrc : svgCoverDataUrl(m.coverSeed);
+          cover.style.width = size + "px";
+          cover.style.height = size + "px";
+          cover.draggable = false;
+
+          const badge = el("div", { className: "badge" });
+          badge.appendChild(heartIcon(14));
+          badge.appendChild(el("span", { className: "count" }, formatLikes(m.likes)));
+
+          bubble.appendChild(cover);
+          bubble.appendChild(ring);
+          bubble.appendChild(badge);
+          bubbleWrap.appendChild(bubble);
+          btn.appendChild(bubbleWrap);
+
+          // 连线：从锚点指向气泡中心，避免遮挡道路的同时保持“对应关系”
+          const len = Math.sqrt(offset.dx * offset.dx + offset.dy * offset.dy);
+          if (len > 8) {
+            const angle = Math.atan2(offset.dy, offset.dx);
+            anchorLine.style.width = `${Math.min(92, len)}px`;
+            anchorLine.style.transform = `translate(0, -50%) rotate(${angle}rad)`;
+            anchorLine.style.opacity = "1";
+          } else {
+            anchorLine.style.width = "0px";
+            anchorLine.style.opacity = "0";
+          }
+
+          wrapper.appendChild(anchorLine);
+          wrapper.appendChild(anchorDot);
+          wrapper.appendChild(btn);
+
+          return wrapper;
+        }
+
+        function renderFeed() {
+          const m = MARKERS.find((x) => x.id === state.selectedId) || topMarker();
+          // 顶部信息
+          const prefix = m.area ? (m.area + "—") : "";
+          spotName.textContent = prefix + m.name;
+          const locT = m.locationTitle || "机位位于当前景点主视野一侧";
+          const locS = m.locationSub || "";
+          chipLocV.textContent = locS ? `${locT} · ${locS}` : locT;
+
+          // 拍摄技巧
+          tipsNo.textContent = String(Math.max(1, (m.tips && m.tips.length) ? m.tips.length : 1));
+          tipsLines.innerHTML = "";
+          const list = (m.tips && m.tips.length) ? m.tips : [
+            "构图：用前景做引导线，主体落在三分线上。",
+            "光线：优先选择清晨/傍晚柔光，避免正午硬光。",
+            "参数：适当降低曝光，保住高光与天空层次。",
+          ];
+          list.slice(0, 3).forEach((t) => {
+            const row = el("div", { className: "line" });
+            row.appendChild(el("div", { className: "dot", "aria-hidden": "true" }));
+            row.appendChild(el("div", {}, t));
+            tipsLines.appendChild(row);
+          });
+
+          // 机位打卡（数量提示）
+          checkinSub.textContent = `共 ${m.photos.length} 条`;
+
+          grid.innerHTML = "";
+
+          m.photos.forEach((p) => {
+            const card = el("div", { className: "card" });
+            card.style.position = "relative";
+
+            if (p.type === "video") {
+              const video = document.createElement("video");
+              video.className = "video";
+              // 关键：不要在渲染阶段就加载 mp4（否则每次重置/重渲染会触发加载中断，出现 net::ERR_ABORTED）
+              // 只在用户点击时才设置 src 并播放
+              video.preload = "none";
+              video.playsInline = true;
+              video.muted = true;
+              video.loop = true;
+              // 默认使用 poster（静态图），避免抽帧/解码导致的兼容问题
+              if (p.poster) video.poster = p.poster;
+              video.style.aspectRatio = `1 / ${p.ratio || 1.25}`;
+              video.style.objectFit = "cover";
+              video.setAttribute("data-src", p.src);
+              video.addEventListener("error", () => {
+                try { showToast("视频加载失败：请检查 mp4 是否可访问 / 格式 / Range"); } catch (_) {}
+              });
+
+              const badge = el("div", { className: "playBadge", "aria-hidden": "true" });
+              badge.innerHTML =
+                '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+                '<path d="M9 7l10 5-10 5V7z" fill="rgba(255,255,255,.92)"/></svg>';
+
+              // 触屏点击：播放/暂停（保持 muted，避免手势限制与噪音）
+              card.addEventListener("click", () => {
+                try {
+                  // 首次点击才挂载 src，避免自动加载导致的中断报错
+                  if (!video.src) {
+                    const ds = video.getAttribute("data-src");
+                    if (ds) video.src = ds;
+                  }
+                  if (video.paused) {
+                    video.play();
+                    badge.style.opacity = "0";
+                  } else {
+                    video.pause();
+                    badge.style.opacity = "1";
+                  }
+                } catch (_) {}
+              });
+
+              card.appendChild(video);
+              card.appendChild(badge);
+            } else {
+              const img = el("img", { className: "photo", alt: "打卡照片" });
+              img.src = p.imageDataUrl;
+              img.loading = "lazy";
+              img.draggable = false;
+              // 用固定宽度 + 高宽比控制高度（模拟瀑布流）
+              img.style.aspectRatio = `1 / ${p.ratio}`;
+              img.style.objectFit = "cover";
+              card.appendChild(img);
+            }
+
+            const meta = el("div", { className: "meta" });
+            const user = el("div", { className: "user" });
+            const avatar = el("img", { className: "avatar", alt: "" });
+            avatar.src = p.user.avatarDataUrl;
+            avatar.draggable = false;
+            user.appendChild(avatar);
+            user.appendChild(el("div", { className: "name" }, p.user.name));
+
+            const likes = el("div", { className: "likes" });
+            likes.appendChild(heartIcon(13));
+            likes.appendChild(el("span", {}, formatLikes(p.like)));
+
+            meta.appendChild(user);
+            meta.appendChild(likes);
+
+            card.appendChild(meta);
+            grid.appendChild(card);
+          });
+        }
+
+        function renderPanelTransform() {
+          // panelY：正值 = 面板整体向下（露出更多地图）；负值 = 面板向上（覆盖更多地图）
+          panel.style.transform = `translate3d(0, ${state.panelY}px, 0)`;
+        }
+
+        function onTapMarker(id) {
+          if (state.selectedId === id) {
+            // 也给一个轻反馈
+            springPulse(id);
+            return;
+          }
+          state.selectedId = id;
+          // 点击即把当前点放到最前，同时触发“缓加载”解锁更多点
+          unlockMoreMarkers();
+          renderMarkers();
+          renderFeed();
+          springPulse(id);
+          const m = MARKERS.find((x) => x.id === id);
+          if (m) {
+            showToast("正在加载更多打卡点…");
+            applyFocusFromMarker(m);
+            centerCameraToMarker(m, 680);
+          }
+          // 点选景点时，面板自动拉起（保持“地图选点 -> 照片上拉”的一致体验）
+          try { animatePanelTo(0, 520); } catch (_) {}
+        }
+
+        function applyFocusFromMarker(marker) {
+          // 仅对带真实封面图的点做“取边缘色”背景；其余点淡出
+          if (marker.coverType === "file" && marker.coverSrc) {
+            extractEdgeRgb(marker.coverSrc).then((rgb) => {
+              if (!rgb) return;
+              document.documentElement.style.setProperty("--focus-rgb", `${rgb.r},${rgb.g},${rgb.b}`);
+              focusGlow.classList.add("show");
+            });
+          } else {
+            focusGlow.classList.remove("show");
+          }
+        }
+
+        function extractEdgeRgb(src) {
+          return new Promise((resolve) => {
+            try {
+              const img = new Image();
+              img.decoding = "async";
+              img.onload = () => {
+                try {
+                  const c = document.createElement("canvas");
+                  const w = 48, h = 48;
+                  c.width = w; c.height = h;
+                  const ctx = c.getContext("2d", { willReadFrequently: true });
+                  if (!ctx) return resolve(null);
+                  ctx.drawImage(img, 0, 0, w, h);
+                  const data = ctx.getImageData(0, 0, w, h).data;
+                  let r = 0, g = 0, b = 0, n = 0;
+                  const add = (x, y) => {
+                    const i = (y * w + x) * 4;
+                    const a = data[i + 3] / 255;
+                    if (a < 0.4) return;
+                    r += data[i] * a;
+                    g += data[i + 1] * a;
+                    b += data[i + 2] * a;
+                    n += a;
+                  };
+                  for (let x = 0; x < w; x++) { add(x, 0); add(x, h - 1); }
+                  for (let y = 1; y < h - 1; y++) { add(0, y); add(w - 1, y); }
+                  if (!n) return resolve(null);
+                  resolve({ r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n) });
+                } catch (_) { resolve(null); }
+              };
+              img.onerror = () => resolve(null);
+              img.src = src;
+            } catch (_) {
+              resolve(null);
+            }
+          });
+        }
+
+        function ensureVideoThumb(src) {
+          // 用视频“第一帧附近”生成 poster（离线、本地文件）
+          // 失败则返回 null，保持 fallback poster
+          if (state.videoThumbCache.has(src)) return Promise.resolve(state.videoThumbCache.get(src));
+          if (state.videoThumbPending.has(src)) return Promise.resolve(null);
+          state.videoThumbPending.add(src);
+          return new Promise((resolve) => {
+            try {
+              const v = document.createElement("video");
+              v.preload = "auto";
+              v.muted = true;
+              v.playsInline = true;
+              // 注意：网页端如果 mp4 位于跨域且未配置 CORS，
+              // 设置 crossOrigin 可能导致部分环境直接无法加载视频。
+              // 这里不强制设置，优先保证“能播放”，抽帧失败就回退。
+              v.src = src;
+              try { v.load(); } catch (_) {}
+
+              const cleanup = () => {
+                try { v.pause(); } catch (_) {}
+                try { v.removeAttribute("src"); v.load(); } catch (_) {}
+              };
+
+              const fail = () => {
+                state.videoThumbPending.delete(src);
+                cleanup();
+                resolve(null);
+              };
+
+              const snap = () => {
+                try {
+                  const c = document.createElement("canvas");
+                  const w = 240;
+                  const h = Math.round((v.videoHeight || 720) / (v.videoWidth || 1280) * w);
+                  c.width = w;
+                  c.height = Math.max(1, h);
+                  const ctx = c.getContext("2d", { willReadFrequently: true });
+                  if (!ctx) return fail();
+                  ctx.drawImage(v, 0, 0, c.width, c.height);
+                  const url = c.toDataURL("image/jpeg", 0.82);
+                  state.videoThumbCache.set(src, url);
+                  state.videoThumbPending.delete(src);
+                  cleanup();
+                  resolve(url);
+                } catch (_) {
+                  fail();
+                }
+              };
+
+              v.addEventListener("error", fail, { once: true });
+              v.addEventListener("loadedmetadata", () => {
+                try {
+                  // 尝试跳到 0.12s，避免 0s 黑帧
+                  const t = Math.min(0.12, Math.max(0.04, (v.duration || 1) * 0.01));
+                  v.currentTime = t;
+                } catch (_) {
+                  // 某些环境不允许 seek，直接等 loadeddata 后截图
+                }
+              }, { once: true });
+              v.addEventListener("seeked", snap, { once: true });
+              v.addEventListener("loadeddata", () => {
+                // 如果 seek 没触发，也在有画面后截一次
+                if (!state.videoThumbCache.has(src)) snap();
+              }, { once: true });
+              // 兜底：若某些 WebView 不触发 seeked/loadeddata，超时放弃
+              setTimeout(() => {
+                if (!state.videoThumbCache.has(src)) fail();
+              }, 2500);
+            } catch (_) {
+              state.videoThumbPending.delete(src);
+              resolve(null);
+            }
+          });
+        }
+
+        function unlockMoreMarkers() {
+          // “缓加载”：分批解锁隐藏的 marker，并带入场动画
+          if (state.unlockTimer) {
+            clearInterval(state.unlockTimer);
+            state.unlockTimer = null;
+          }
+          const order = MARKERS.slice().sort((a, b) => b.likes - a.likes);
+          const batch = 2;
+          const step = () => {
+            const locked = order.filter((m) => !state.unlockedIds.has(m.id));
+            if (locked.length === 0) {
+              clearInterval(state.unlockTimer);
+              state.unlockTimer = null;
+              return;
+            }
+            locked.slice(0, batch).forEach((m) => {
+              state.unlockedIds.add(m.id);
+              state.newlyUnlockedIds.add(m.id);
+            });
+            renderMarkers();
+          };
+          // 先立即补一批，再定时补齐
+          step();
+          state.unlockTimer = setInterval(step, 260);
+        }
+
+        // 入场专用：所有景点球“一个一个跳”依次出现（节奏不单调）
+        function cascadeUnlockMarkers() {
+          if (state.unlockTimer) {
+            clearInterval(state.unlockTimer);
+            state.unlockTimer = null;
+          }
+          const order = MARKERS.slice().sort((a, b) => b.likes - a.likes); // 热度高的先出现更有戏剧性
+          const locked = order.filter((m) => !state.unlockedIds.has(m.id));
+          if (locked.length === 0) return;
+
+          // 节奏：一快一慢的“呼吸”式节拍（依然严格一次一个）
+          const beats = [120, 150, 110, 170, 130, 160];
+          let i = 0;
+          const step = () => {
+            const next = locked[i];
+            if (!next) {
+              state.unlockTimer = null;
+              return;
+            }
+            state.unlockedIds.add(next.id);
+            state.newlyUnlockedIds.add(next.id);
+            renderMarkers();
+
+            // 下一拍
+            i += 1;
+            const t = beats[i % beats.length];
+            state.unlockTimer = setTimeout(step, t);
+          };
+          step();
+        }
+
+        function centerCameraToMarker(marker, durationMs) {
+          // 点击后：把“气泡圆圈”动态放到正中间，同时微微缩放以展示更多点
+          const targetScale = clamp(state.camera.scale - 0.10, 1.06, 1.22);
+          const target = cameraTransformToFocusBubble(marker, targetScale);
+          animateCameraTo(target, durationMs, () => {
+            state.camera = clampCamera(target);
+          });
+        }
+
+        function springPulse(markerId) {
+          // 给被点击的 marker 做回弹（不依赖 Framer Motion，使用 CSS animation）
+          const node = Array.from(markersLayer.querySelectorAll(".marker")).find((n) => n && n.classList.contains("marker") && getMarkerIdFromNode(n) === markerId);
+          if (!node) return;
+          const btn = node.querySelector("button");
+          if (!btn) return;
+          btn.classList.remove("pop");
+          // 强制回流以重启动画
+          void btn.offsetWidth;
+          btn.classList.add("pop");
+        }
+
+        function getMarkerIdFromNode(node) {
+          // marker 的定位信息写在 left/top 上，无法直接反查；这里用 aria-label 简单匹配
+          const btn = node.querySelector("button");
+          if (!btn) return "";
+          const label = btn.getAttribute("aria-label") || "";
+          // label：选择打卡点：xxx；我们用 name 反查
+          const name = label.replace("选择打卡点：", "");
+          const m = MARKERS.find((x) => x.name === name);
+          return m ? m.id : "";
+        }
+
+        function showToast(text) {
+          toast.textContent = text;
+          toast.classList.add("show");
+          if (state.toastTimer) clearTimeout(state.toastTimer);
+          state.toastTimer = setTimeout(() => toast.classList.remove("show"), 1200);
+        }
+
+        function initLocation() {
+          // 不请求定位权限：用“模拟的当前位置”来驱动入场体验（稳定且不弹系统授权）
+          // 规则：优先读取 localStorage 中上次的点位；否则生成一个“更像真实定位”的稳定点并保存
+          try {
+            const KEY = "dy_bars_me_v1";
+            const raw = localStorage.getItem(KEY);
+            if (raw) {
+              const obj = JSON.parse(raw);
+              const x = clamp(Number(obj?.x ?? 54), 8, 92);
+              const y = clamp(Number(obj?.y ?? 54), 8, 92);
+              state.me = { x, y, source: "mock" };
+            } else {
+              // 生成一个偏“地图热区”的点：避免出现在边缘导致周边无点
+              const seed = Math.floor(Date.now() / 1000);
+              const fx = (Math.sin(seed * 12.9898) * 43758.5453) % 1;
+              const fy = (Math.sin((seed + 7) * 78.233) * 12345.6789) % 1;
+              const x = clamp(22 + Math.abs(fx) * 56, 10, 90);
+              const y = clamp(22 + Math.abs(fy) * 56, 10, 90);
+              state.me = { x, y, source: "mock" };
+              localStorage.setItem(KEY, JSON.stringify({ x, y }));
+            }
+
+            // 保证“你的附近至少有一个景点球”：如果当前位置周边没有已解锁点，解锁离你最近的一个
+            try { ensureNearestMarkerUnlocked(); } catch (_) {}
+            renderMarkers();
+
+            // 若用户没手动拖拽过地图，则自动把“上半屏可视区域”的中心对齐到你的当前位置
+            if (!state.userInteracted) {
+              setTimeout(() => {
+                try { focusCameraToMe(720); } catch (_) {}
+              }, 80);
+            }
+          } catch (_) {
+            // 兜底：继续使用默认 mock
+          }
+        }
+
+        /* ===========================
+           地图“Zoom & Pan”入场：自动聚焦到最高赞聚合点
+           - 纯 JS + rAF 插值（更接近 Framer Motion 的 smooth feeling）
+        ============================ */
+        function autoFocusCamera() {
+          const hot = topMarker();
+          const start = { x: 0, y: 0, scale: 1.06 }; // 稍微放大一点，让入场更“有动感”
+          const target = cameraTransformToFocus(hot, 1.26);
+
+          // 先设置起始
+          state.camera = clampCamera(start);
+          applyCameraTransform(state.camera);
+
+          // 平滑过渡到目标
+          animateCameraTo(target, 1200, () => {
+            state.camera = clampCamera(target);
+            // 给一个引导提示
+            showToast("已自动聚焦到热度最高打卡点");
+          });
+        }
+
+        function getViewCenter() {
+          const rect = mapWrap.getBoundingClientRect();
+          // 面板打开时，地图的“可视区域”是 rect.top ~ panel.top
+          // 因此把目标中心放在“可视区域的中部”，让上半屏更自然
+          let vb = rect.bottom;
+          try {
+            const pr = panel.getBoundingClientRect();
+            vb = Math.min(rect.bottom, pr.top);
+          } catch (_) {}
+          const visibleH = Math.max(1, vb - rect.top);
+          const cx = rect.width * 0.52;
+          const cy = visibleH * 0.56; // 稍微偏下，让“你的位置”在上半屏更舒服
+          return { rect, cx, cy };
+        }
+
+        function cameraTransformToFocus(marker, scale) {
+          // 目标：把 marker 移动到“可视区域”的中心（面板打开时是上半屏）
+          const rect = mapWrap.getBoundingClientRect();
+          const vc = getViewCenter();
+          const cx = vc.cx;
+          const cy = vc.cy;
+          const BASE = 1.6;
+          const OFF = (1 - BASE) / 2; // -0.3
+          const mx = rect.width * OFF + rect.width * BASE * (marker.x / 100);
+          const my = rect.height * OFF + rect.height * BASE * (marker.y / 100);
+          const tx = cx - mx;
+          const ty = cy - my;
+          return { x: tx, y: ty, scale };
+        }
+
+        function cameraTransformToPoint(pt, scale) {
+          // 目标：把任意坐标点放到“可视区域”的中心（面板打开时是上半屏）
+          const rect = mapWrap.getBoundingClientRect();
+          const vc = getViewCenter();
+          const cx = vc.cx;
+          const cy = vc.cy;
+          const BASE = 1.6;
+          const OFF = (1 - BASE) / 2;
+          const px = rect.width * OFF + rect.width * BASE * (pt.x / 100);
+          const py = rect.height * OFF + rect.height * BASE * (pt.y / 100);
+          const tx = cx - px;
+          const ty = cy - py;
+          return { x: tx, y: ty, scale };
+        }
+
+        function focusCameraToMe(durationMs) {
+          if (state.userInteracted) return;
+
+          // 先确保至少有一个“附近点”被解锁（否则视野里可能一个球都没有）
+          try { ensureNearestMarkerUnlocked(); } catch (_) {}
+
+          const me = state.me || { x: 54, y: 54 };
+          const scaleCandidates = [1.22, 1.12, 1.02, 0.94, 0.88];
+
+          function visibleBounds() {
+            const rect = mapWrap.getBoundingClientRect();
+            let vb = rect.bottom;
+            try {
+              const pr = panel.getBoundingClientRect();
+              vb = Math.min(rect.bottom, pr.top);
+            } catch (_) {}
+            return { rect, h: Math.max(1, vb - rect.top) };
+          }
+
+          function markerScreenPos(m, cam, rect) {
+            const size = markerSize(m.likes);
+            const off = getMarkerOffsetBase(m, size);
+            const BASE = 1.6;
+            const OFF = (1 - BASE) / 2;
+            const wx = rect.width * OFF + rect.width * BASE * (m.x / 100) + off.dx;
+            const wy = rect.height * OFF + rect.height * BASE * (m.y / 100) + off.dy;
+            // transform: translate(...) scale(...)，按“先缩放后平移”的等效计算
+            const sx = wx * cam.scale + cam.x;
+            const sy = wy * cam.scale + cam.y;
+            return { sx, sy };
+          }
+
+          function hasAnyMarkerInView(cam) {
+            const { rect, h } = visibleBounds();
+            const margin = 24;
+            const ids = state.unlockedIds ? Array.from(state.unlockedIds) : [];
+            const list = ids.length ? MARKERS.filter((m) => state.unlockedIds.has(m.id)) : MARKERS;
+            for (const m of list) {
+              const p = markerScreenPos(m, cam, rect);
+              if (p.sx >= -margin && p.sx <= rect.width + margin && p.sy >= -margin && p.sy <= h + margin) return true;
+            }
+            return false;
+          }
+
+          // 选择一个 scale：在“以你为中心”的前提下，保证上半屏至少能看到一个圆圈
+          let chosen = null;
+          for (const s of scaleCandidates) {
+            const cand = clampCamera(cameraTransformToPoint(me, s));
+            if (hasAnyMarkerInView(cand)) {
+              chosen = cand;
+              break;
+            }
+          }
+
+          // 兜底：如果还是一个都看不到（极端情况），继续缩小到 0.82
+          if (!chosen) {
+            chosen = clampCamera(cameraTransformToPoint(me, 0.82));
+          }
+
+          animateCameraTo(chosen, durationMs || 900, () => {
+            state.camera = clampCamera(chosen);
+          });
+        }
+
+        function cameraTransformToFocusBubble(marker, scale) {
+          // 让“圆形气泡”本体居中（考虑避让路线导致的 offset）
+          const rect = mapWrap.getBoundingClientRect();
+          const vc = getViewCenter();
+          const cx = vc.cx;
+          const cy = vc.cy;
+          const size = markerSize(marker.likes);
+          const offset = getMarkerOffset(marker, size);
+          const BASE = 1.6;
+          const OFF = (1 - BASE) / 2;
+          const mx = rect.width * OFF + rect.width * BASE * (marker.x / 100) + offset.dx;
+          const my = rect.height * OFF + rect.height * BASE * (marker.y / 100) + offset.dy;
+          const tx = cx - mx;
+          const ty = cy - my;
+          return { x: tx, y: ty, scale };
+        }
+
+        function applyCameraTransform(t) {
+          camera.style.transform = `translate3d(${t.x}px, ${t.y}px, 0) scale(${t.scale})`;
+        }
+
+        function animateCameraTo(target, durationMs, onDone) {
+          const start = state.camera;
+          const token = ++state.cameraAnimToken;
+          const t0 = performance.now();
+          function tick(now) {
+            if (token !== state.cameraAnimToken) return;
+            const p = clamp((now - t0) / durationMs, 0, 1);
+            const k = easeInOut(p);
+            const cur = {
+              x: lerp(start.x, target.x, k),
+              y: lerp(start.y, target.y, k),
+              scale: lerp(start.scale, target.scale, k),
+            };
+            applyCameraTransform(clampCamera(cur));
+            if (p < 1) requestAnimationFrame(tick);
+            else onDone && onDone();
+          }
+          requestAnimationFrame(tick);
+        }
+
+        function nudgeCameraTo(marker, durationMs) {
+          const current = state.camera;
+          const target = cameraTransformToFocus(marker, clamp(current.scale, 1.12, 1.32));
+          // 做“轻微”移动：只走 40% 路程
+          const soft = {
+            x: current.x + (target.x - current.x) * 0.4,
+            y: current.y + (target.y - current.y) * 0.4,
+            scale: current.scale,
+          };
+          const from = { ...current };
+          const token = ++state.cameraAnimToken;
+          const t0 = performance.now();
+          function tick(now) {
+            if (token !== state.cameraAnimToken) return;
+            const p = clamp((now - t0) / durationMs, 0, 1);
+            const k = easeInOut(p);
+            const cur = { x: lerp(from.x, soft.x, k), y: lerp(from.y, soft.y, k), scale: lerp(from.scale, soft.scale, k) };
+            applyCameraTransform(clampCamera(cur));
+            if (p < 1) requestAnimationFrame(tick);
+            else state.camera = soft;
+          }
+          requestAnimationFrame(tick);
+        }
+
+        function lerp(a, b, t) { return a + (b - a) * t; }
+
+        function clampCamera(cam) {
+          // 根据当前 scale 限制平移范围，避免拖拽把地图拖没了
+          const rect = mapWrap.getBoundingClientRect();
+          const s = cam.scale || 1;
+          // 世界层比视口更大（BASE），所以可平移范围更大，不会露出底色
+          const BASE = 1.6;
+          const maxX = (rect.width * (BASE * s - 1)) / 2;
+          const maxY = (rect.height * (BASE * s - 1)) / 2;
+          return {
+            x: clamp(cam.x, -maxX, maxX),
+            y: clamp(cam.y, -maxY, maxY),
+            scale: cam.scale,
+          };
+        }
+
+        function enableMapPan() {
+          // 触屏拖拽平移地图（不依赖 hover/滚轮）
+          let dragging = false;
+          let startX = 0, startY = 0;
+          let baseX = 0, baseY = 0;
+
+          const onDown = (e) => {
+            // 点在 marker 上时不触发拖拽，保持点击选择体验
+            if (e.target && e.target.closest && e.target.closest(".marker")) return;
+            // 滑动地图时：下拉框（照片面板）自动取消/收起
+            try { collapsePanelPeek(260); } catch (_) {}
+            dragging = true;
+            state.userInteracted = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            baseX = state.camera.x;
+            baseY = state.camera.y;
+            state.cameraAnimToken++; // 取消进行中的自动动画
+            mapWrap.setPointerCapture && mapWrap.setPointerCapture(e.pointerId);
+            e.preventDefault();
+          };
+
+          const onMove = (e) => {
+            if (!dragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const next = clampCamera({ x: baseX + dx, y: baseY + dy, scale: state.camera.scale });
+            state.camera = next;
+            applyCameraTransform(next);
+            e.preventDefault();
+          };
+
+          const onUp = (e) => {
+            if (!dragging) return;
+            dragging = false;
+            e.preventDefault();
+          };
+
+          // 禁止浏览器默认的触控滚动/缩放手势干扰（只针对地图区）
+          mapWrap.style.touchAction = "none";
+          mapWrap.addEventListener("pointerdown", onDown, { passive: false });
+          window.addEventListener("pointermove", onMove, { passive: false });
+          window.addEventListener("pointerup", onUp, { passive: false });
+          window.addEventListener("pointercancel", onUp, { passive: false });
+        }
+
+        /* ===========================
+           抽屉拖拽：触屏优先（Pointer Events）
+           - 只在 handle 区域开始拖拽，避免影响瀑布流滚动
+           - 支持轻微覆盖地图：上滑时面板向上，露出更少地图
+        ============================ */
+        function enablePanelDrag() {
+          // snap points：0（默认）、-120（覆盖更多地图）、+80（收起露出更多地图）
+          const SNAP = [ -140, 0, 90 ];
+          let dragging = false;
+          let startY = 0;
+          let startPanelY = 0;
+
+          const onDown = (e) => {
+            if (e.pointerType === "mouse") {
+              // 平台是触屏优先，但允许鼠标点击测试；不允许滚轮/hover
+            }
+            dragging = true;
+            startY = e.clientY;
+            startPanelY = state.panelY;
+            handle.setPointerCapture && handle.setPointerCapture(e.pointerId);
+            e.preventDefault();
+          };
+
+          const onMove = (e) => {
+            if (!dragging) return;
+            const dy = e.clientY - startY;
+            // 向上拖 -> panelY 变小（更负）-> 覆盖更多地图
+            const next = clamp(startPanelY + dy, SNAP[0], SNAP[2]);
+            state.panelY = next;
+            renderPanelTransform();
+            e.preventDefault();
+          };
+
+          const onUp = (e) => {
+            if (!dragging) return;
+            dragging = false;
+            // 松手后吸附最近的 snap
+            const target = nearestSnap(state.panelY, SNAP);
+            animatePanelTo(target, 240);
+            e.preventDefault();
+          };
+
+          handle.addEventListener("pointerdown", onDown, { passive: false });
+          window.addEventListener("pointermove", onMove, { passive: false });
+          window.addEventListener("pointerup", onUp, { passive: false });
+          window.addEventListener("pointercancel", onUp, { passive: false });
+
+          // 键盘无障碍：上下键微调
+          handle.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              animatePanelTo(nearestSnap(state.panelY - 90, SNAP), 180);
+            }
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              animatePanelTo(nearestSnap(state.panelY + 90, SNAP), 180);
+            }
+          });
+        }
+
+        function nearestSnap(value, snaps) {
+          let best = snaps[0];
+          let dist = Math.abs(value - best);
+          for (let i = 1; i < snaps.length; i++) {
+            const d = Math.abs(value - snaps[i]);
+            if (d < dist) { dist = d; best = snaps[i]; }
+          }
+          return best;
+        }
+
+        function animatePanelTo(target, durationMs) {
+          const from = state.panelY;
+          const t0 = performance.now();
+          function tick(now) {
+            const p = clamp((now - t0) / durationMs, 0, 1);
+            const k = easeOutCubic(p);
+            state.panelY = lerp(from, target, k);
+            renderPanelTransform();
+            if (p < 1) requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        }
+      })();
+    </script>
+
+    <script>
+      // 全局错误兜底：避免白屏（符合 Skill 要求）
+      window.addEventListener("error", function (e) {
+        try {
+          const existing = document.getElementById("fatal-screen");
+          if (existing) return;
+          const screen = document.createElement("div");
+          screen.id = "fatal-screen";
+          screen.className = "screen";
+          const box = document.createElement("div");
+          box.className = "box";
+          box.innerHTML =
+            '<div style="font-weight:800;font-size:16px;letter-spacing:-.02em">哎呀，出错了</div>' +
+            '<div style="margin-top:8px;color:rgba(255,255,255,.70);font-size:13px;line-height:1.5">请关闭弹窗后重试一次；如果仍然出现，可把报错截图发给开发同学排查。</div>' +
+            '<button class="btn" type="button" id="btn-close">关闭提示</button>';
+          screen.appendChild(box);
+          document.body.appendChild(screen);
+          document.getElementById("btn-close").addEventListener("click", function () {
+            try { screen.remove(); } catch (_) {}
+          });
+        } catch (_) {}
+      });
+    </script>
+  </body>
+</html>
